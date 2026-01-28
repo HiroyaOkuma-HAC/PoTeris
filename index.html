@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Tetris Ultimate - Cyber Grid Edition</title>
+    <title>Tetris Ultimate - Controller Menu Support</title>
     <style>
         body { 
             background: #0a0a0a; 
@@ -37,7 +37,7 @@
         canvas#tetris { display: block; background-color: rgba(0, 0, 0, 0.8); cursor: crosshair; }
         
         .side-panel { display: flex; flex-direction: column; gap: 10px; width: 120px; }
-        .stats-panel { width: 150px; } /* 統計用の少し広いパネル */
+        .stats-panel { width: 150px; } 
         .panel-box { background: rgba(26, 26, 26, 0.8); border: 2px solid #444; border-radius: 5px; padding: 10px; text-align: center; }
         .panel-title { font-size: 11px; color: #00d2ff; margin-bottom: 5px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
         
@@ -52,7 +52,6 @@
         
         #score { font-size: 20px; font-weight: bold; color: #00ffcc; text-shadow: 0 0 10px rgba(0, 255, 204, 0.5); }
         
-        /* 統計テキストのスタイル */
         .stat-row { display: flex; justify-content: space-between; font-size: 12px; margin: 2px 0; color: #ccc; border-bottom: 1px solid #333; }
         .stat-val { color: #fff; font-weight: bold; }
         .stat-high { color: #ffd700; }
@@ -65,12 +64,15 @@
 
         .overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 100; justify-content: center; align-items: center; backdrop-filter: blur(8px); }
         .menu-card { background: #111; border: 3px solid #00d2ff; padding: 30px; border-radius: 15px; width: 420px; text-align: center; box-shadow: 0 0 50px rgba(0, 210, 255, 0.3); }
-        .menu-item { background: #222; border: 1px solid #444; border-radius: 10px; padding: 12px; margin: 8px 0; cursor: pointer; font-size: 16px; font-weight: bold; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; }
-        .menu-item:hover { border-color: #00d2ff; color: #00d2ff; }
+        
+        /* --- メニュー選択時のスタイル --- */
+        .menu-item { background: #222; border: 2px solid #444; border-radius: 10px; padding: 12px; margin: 8px 0; cursor: pointer; font-size: 16px; font-weight: bold; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; }
+        .menu-item:hover, .menu-item.selected { border-color: #00d2ff; color: #00d2ff; background: #2a2a2a; box-shadow: 0 0 15px rgba(0, 210, 255, 0.4); transform: scale(1.02); }
         
         .url-input { width: 90%; padding: 8px; margin-top: 8px; background: #000; border: 1px solid #444; color: #00d2ff; border-radius: 5px; font-size: 12px; outline: none; }
         .url-input:focus { border-color: #00d2ff; }
-        .close-btn { margin-top: 20px; color: #aaa; cursor: pointer; font-size: 14px; }
+        .close-btn { margin-top: 20px; color: #aaa; cursor: pointer; font-size: 14px; border: 1px solid transparent; padding: 5px; border-radius: 5px; }
+        .close-btn.selected { border-color: #ff4444; color: #ff4444; }
         
         .switch { position: relative; display: inline-block; width: 44px; height: 22px; }
         .switch input { opacity: 0; width: 0; height: 0; }
@@ -88,7 +90,7 @@
     </div>
 
     <div id="shop-overlay" class="overlay">
-        <div class="menu-card">
+        <div class="menu-card" id="shop-card">
             <h2 style="color:#00d2ff; margin-top:0;">✨ SELECT SEQUENCE ✨</h2>
             <div class="menu-item" style="color:#ffd700;" onclick="buyTSpinTemplate()">T-Spin Triple Tower</div>
             <div class="menu-item" style="color:#ffcc00;" onclick="buyHachimitsu()">Hachimitsu Cannon</div>
@@ -99,7 +101,7 @@
     </div>
 
     <div id="options-overlay" class="overlay">
-        <div class="menu-card">
+        <div class="menu-card" id="options-card">
             <h2 style="color:#ff00ff; margin-top:0;">⚙️ OPTIONS</h2>
             <div class="menu-item" style="flex-direction: column; align-items: flex-start; cursor: default;">
                 <div style="display:flex; justify-content: space-between; width:100%;">
@@ -112,14 +114,14 @@
                 <span>RETRY GAME</span>
                 <span style="font-size: 12px; color: #ff4444;">↻</span>
             </div>
-            <div class="menu-item">
+            <div class="menu-item" onclick="toggleCheckbox('shake-harddrop')">
                 <span>HardDrop Shake</span>
                 <label class="switch">
                     <input type="checkbox" id="shake-harddrop" checked>
                     <span class="slider"></span>
                 </label>
             </div>
-            <div class="menu-item">
+            <div class="menu-item" onclick="toggleCheckbox('shake-line')">
                 <span>Line Clear Shake</span>
                 <label class="switch">
                     <input type="checkbox" id="shake-line" checked>
@@ -172,6 +174,10 @@
     </div>
 
 <script>
+// --- 追加：メニューインデックス管理 ---
+let currentMenuIndex = 0;
+let activeMenuElements = [];
+
 function changeBackground(url) {
     if (url.trim() === "") {
         document.body.style.backgroundImage = "none";
@@ -188,7 +194,6 @@ const renContainer = document.getElementById('ren-container');
 const holdCanvas = document.getElementById('hold-canvas').getContext('2d');
 const nextCtxs = [1,2,3,4,5].map(i => document.getElementById(i===1?'next-1':`next-${i}`).getContext('2d'));
 
-// 統計表示用要素
 const statElems = {
     highScore: document.getElementById('stat-high-score'),
     maxRen: document.getElementById('stat-max-ren'),
@@ -223,7 +228,6 @@ let lockTimer = 0, moveCount = 0, btbActive = false, shakeTimer = 0, renCount = 
 const LOCK_DELAY = 1000, MAX_MOVES = 15;
 const player = { pos: {x: 3, y: 0}, matrix: null, type: null, rotation: 0, score: 0, lastOpWasRotate: false };
 
-// 統計データ管理
 let stats = {
     highScore: 0, maxRen: 0, totalLines: 0, tetris: 0, ts: 0, td: 0, tt: 0, btb: 0
 };
@@ -241,7 +245,10 @@ function updateStatsUI() {
 
 const DAS_DELAY = 160, ARR_SPEED = 30;
 let keys = {};
-let dasTimers = { 37: 0, 39: 0, 65: 0, 68: 0 }, lastRepeat = { 37: 0, 39: 0, 65: 0, 68: 0 };
+let dasTimers = { 37: 0, 39: 0, 40: 0 };
+let lastRepeat = { 37: 0, 39: 0, 40: 0 };
+
+let prevGamepadState = { buttons: [], axes: [] };
 
 window.addEventListener('keydown', e => {
     if (isPaused && e.keyCode !== 27) return; 
@@ -251,8 +258,15 @@ window.addEventListener('keydown', e => {
     if (e.keyCode === 69) playerRotate(1);
     if (e.keyCode === 81) playerRotate(-1);
     if (e.keyCode === 67 || e.keyCode === 16) playerHold();
+    if (e.keyCode === 27) toggleOptions();
 });
-window.addEventListener('keyup', e => { keys[e.keyCode] = false; if (dasTimers[e.keyCode] !== undefined) dasTimers[e.keyCode] = 0; });
+window.addEventListener('keyup', e => { 
+    keys[e.keyCode] = false; 
+    if (dasTimers[e.keyCode] !== undefined) {
+        dasTimers[e.keyCode] = 0;
+        lastRepeat[e.keyCode] = 0;
+    }
+});
 canvas.addEventListener('mousedown', e => { e.preventDefault(); if (isPaused) return; if (e.button === 0) playerRotate(-1); if (e.button === 2) playerRotate(1); });
 window.addEventListener('wheel', e => { e.preventDefault(); if (!isPaused) playerHold(); }, { passive: false });
 
@@ -356,7 +370,6 @@ function arenaSweep() {
                 const names = ["", "SINGLE", "DOUBLE", "TRIPLE"]; 
                 tSpinAnnounce = { text: `${bonusText}T-SPIN ${names[lines]}!`, life: 100, isBtB: btbActive, isPerfect: false }; 
                 b *= 2; 
-                // 統計加算
                 if(lines === 1) stats.ts++; else if(lines === 2) stats.td++; else if(lines === 3) stats.tt++;
             }
             else if (lines === 4) { 
@@ -435,18 +448,131 @@ function draw() {
     }
 }
 
+// --- 【修正】ゲームパッド入力の監視 (メニュー操作対応) ---
+function updateGamepad() {
+    const gamepads = navigator.getGamepads();
+    if (!gamepads[0]) return;
+    const gp = gamepads[0];
+
+    // ボタンの「押された瞬間」を判定する
+    const isJustPressed = (idx) => {
+        const b = gp.buttons[idx];
+        if (!b) return false;
+        const val = b.value !== undefined ? b.value : (b.pressed ? 1 : 0);
+        const prevVal = prevGamepadState.buttons[idx] || 0;
+        return val > 0.2 && prevVal <= 0.2;
+    };
+
+    // メニューが開いている時の操作
+    if (isPaused) {
+        // 十字キー上下 または スティック上下 で選択移動
+        const upPressed = isJustPressed(12) || (gp.axes[1] < -0.5 && (prevGamepadState.axes[1] || 0) >= -0.5);
+        const downPressed = isJustPressed(13) || (gp.axes[1] > 0.5 && (prevGamepadState.axes[1] || 0) <= 0.5);
+
+        if (upPressed) {
+            currentMenuIndex = (currentMenuIndex - 1 + activeMenuElements.length) % activeMenuElements.length;
+            updateMenuSelection();
+        }
+        if (downPressed) {
+            currentMenuIndex = (currentMenuIndex + 1) % activeMenuElements.length;
+            updateMenuSelection();
+        }
+
+        // Bボタン(1)で決定
+        if (isJustPressed(0)) {
+            activeMenuElements[currentMenuIndex].click();
+        }
+        // Aボタン(0)で閉じる
+        if (isJustPressed(1)) {
+            if (document.getElementById('shop-overlay').style.display === 'flex') toggleShop();
+            else if (document.getElementById('options-overlay').style.display === 'flex') toggleOptions();
+        }
+        
+    } else {
+        // 通常プレイ中の操作
+        const leftPressed = (gp.buttons[14] && gp.buttons[14].pressed) || gp.axes[0] < -0.5;
+        const rightPressed = (gp.buttons[15] && gp.buttons[15].pressed) || gp.axes[0] > 0.5;
+        const downPressed = (gp.buttons[13] && gp.buttons[13].pressed) || gp.axes[1] > 0.5;
+
+        if (leftPressed) { if(!keys[37]) keys[37] = true; } else { if(keys[37]) { keys[37] = false; dasTimers[37] = 0; lastRepeat[37] = 0; } }
+        if (rightPressed) { if(!keys[39]) keys[39] = true; } else { if(keys[39]) { keys[39] = false; dasTimers[39] = 0; lastRepeat[39] = 0; } }
+        if (downPressed) { keys[40] = true; } else { keys[40] = false; }
+
+        if (isJustPressed(1)) playerRotate(1);  // Bボタン相当
+        if (isJustPressed(0)) playerRotate(-1); // Aボタン相当
+        if (isJustPressed(12) || (gp.axes[1] < -0.5 && (prevGamepadState.axes[1] || 0) >= -0.5)) hardDrop();
+        if (isJustPressed(4) || isJustPressed(5)) playerHold();
+
+        // View(セレクト)ボタン(8) または Menu(スタート)ボタン(9) でメニュー開閉
+        if (isJustPressed(8)) toggleShop();
+        if (isJustPressed(9)) toggleOptions();
+    }
+
+    prevGamepadState.buttons = gp.buttons.map(b => b.value);
+    prevGamepadState.axes = [...gp.axes];
+}
+
+// --- メニュー選択の視覚的更新 ---
+function updateMenuSelection() {
+    activeMenuElements.forEach((el, idx) => {
+        if (idx === currentMenuIndex) el.classList.add('selected');
+        else el.classList.remove('selected');
+    });
+}
+
 function handleInput(now) { 
     if (isPaused) return;
-    [{ key: 37, dir: -1 }, { key: 65, dir: -1 }, { key: 39, dir: 1 }, { key: 68, dir: 1 }].forEach(({key, dir}) => { 
-        if (keys[key]) { 
-            if (dasTimers[key] === 0) { playerMove(dir); dasTimers[key] = now; lastRepeat[key] = now; } 
-            else if (now - dasTimers[key] > DAS_DELAY) { if (now - lastRepeat[key] > ARR_SPEED) { playerMove(dir); lastRepeat[key] = now; } } 
+    updateGamepad(); 
+    
+    const moveSettings = [{ keys: [37, 65], dir: -1 }, { keys: [39, 68], dir: 1 }];
+    moveSettings.forEach(({keys: kList, dir}) => { 
+        const isAnyDown = kList.some(k => keys[k]);
+        const primaryKey = kList[0]; 
+
+        if (isAnyDown) { 
+            if (dasTimers[primaryKey] === 0) { 
+                playerMove(dir); 
+                dasTimers[primaryKey] = now; 
+                lastRepeat[primaryKey] = now; 
+            } 
+            else if (now - dasTimers[primaryKey] > DAS_DELAY) { 
+                if (now - lastRepeat[primaryKey] > ARR_SPEED) { 
+                    playerMove(dir); 
+                    lastRepeat[primaryKey] = now; 
+                } 
+            } 
         } 
     }); 
 }
 
-function toggleShop() { const s = document.getElementById('shop-overlay'); isPaused = (s.style.display !== 'flex'); s.style.display = isPaused ? 'flex' : 'none'; }
-function toggleOptions() { const o = document.getElementById('options-overlay'); isPaused = (o.style.display !== 'flex'); o.style.display = isPaused ? 'flex' : 'none'; }
+// --- メニュー開閉の拡張 ---
+function toggleShop() { 
+    const s = document.getElementById('shop-overlay'); 
+    isPaused = (s.style.display !== 'flex'); 
+    s.style.display = isPaused ? 'flex' : 'none'; 
+    if (isPaused) {
+        activeMenuElements = Array.from(document.querySelectorAll('#shop-card .menu-item, #shop-card .close-btn'));
+        currentMenuIndex = 0;
+        updateMenuSelection();
+    }
+}
+
+function toggleOptions() { 
+    const o = document.getElementById('options-overlay'); 
+    isPaused = (o.style.display !== 'flex'); 
+    o.style.display = isPaused ? 'flex' : 'none'; 
+    if (isPaused) {
+        activeMenuElements = Array.from(document.querySelectorAll('#options-card .menu-item, #options-card .close-btn'));
+        currentMenuIndex = 0;
+        updateMenuSelection();
+    }
+}
+
+// チェックボックスをコントローラーで操作するためのヘルパー
+function toggleCheckbox(id) {
+    const cb = document.getElementById(id);
+    cb.checked = !cb.checked;
+}
 
 function resetGame() { 
     arena.forEach(row => row.fill(0)); 
@@ -454,7 +580,6 @@ function resetGame() {
     btbActive = false; renCount = -1; 
     renCountElement.innerText = "0"; renCountElement.style.color = "#ff9900"; 
     holdPiece = null; nextQueue = []; 
-    // 統計のうち累計スコア以外をリセット（お好みで調整）
     stats.maxRen = 0; stats.totalLines = 0; stats.tetris = 0; stats.ts = 0; stats.td = 0; stats.tt = 0; stats.btb = 0;
     updateStatsUI();
     playerReset(); fieldFlash = 0; 
@@ -481,6 +606,8 @@ function update(time = 0) {
         dropCounter += dt; handleInput(time);
         if (collide(arena, {pos:{x:player.pos.x, y:player.pos.y+1}, matrix:player.matrix})) { lockTimer += dt; if(lockTimer >= LOCK_DELAY) lockPiece(); } 
         else { let threshold = (keys[40] || keys[83]) ? 50 : 1000; if (dropCounter > threshold) playerDrop(); }
+    } else {
+        updateGamepad();
     }
     draw(); requestAnimationFrame(update);
 }
