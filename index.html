@@ -2,12 +2,12 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Tetris Ultimate - Professional Edition</title>
+    <title>Tetris Ultimate - Pro Input Edition</title>
     <style>
-        body { background: #1a1a1a; color: #fff; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; overflow: hidden; }
+        body { background: #1a1a1a; color: #fff; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; overflow: hidden; user-select: none; }
         #game-layout { display: flex; gap: 20px; align-items: flex-start; }
         #game-container { position: relative; border: 4px solid #333; border-radius: 5px; box-shadow: 0 0 30px rgba(0,0,0,0.7); }
-        canvas#tetris { display: block; background-color: #000; }
+        canvas#tetris { display: block; background-color: #000; cursor: crosshair; }
         
         .side-panel { display: flex; flex-direction: column; gap: 10px; width: 120px; }
         .panel-box { background: #2a2a2a; border: 2px solid #444; border-radius: 5px; padding: 10px; text-align: center; }
@@ -35,7 +35,7 @@
 </head>
 <body oncontextmenu="return false;">
 
-    <div id="gp-status" style="position:fixed; top:10px; right:10px; font-size:12px; color:#666;">Gamepad: Disconnected</div>
+    <div id="gp-status" style="position:fixed; top:10px; right:10px; font-size:12px; color:#666;">Controls: WASD / Mouse Wheel (Hold)</div>
     <button id="shop-trigger" onclick="toggleShop()">🛒 テンプレートショップ</button>
 
     <div id="shop-overlay">
@@ -99,14 +99,40 @@ let lockTimer = 0, moveCount = 0, btbActive = false, shakeTimer = 0, renCount = 
 const LOCK_DELAY = 1000, MAX_MOVES = 15;
 const player = { pos: {x: 3, y: 0}, matrix: null, type: null, rotation: 0, score: 0, lastOpWasRotate: false };
 
-const DAS_DELAY = 170; const ARR_SPEED = 35;
-let dasTimers = { left: 0, right: 0 };
-let lastRepeat = { left: 0, right: 0 };
+// --- 入力設定 (DAS/ARR) ---
+const DAS_DELAY = 160; 
+const ARR_SPEED = 30;
 let keys = {};
-let prevButtons = [];
+let dasTimers = { 37: 0, 39: 0, 65: 0, 68: 0 };
+let lastRepeat = { 37: 0, 39: 0, 65: 0, 68: 0 };
 
-document.addEventListener('keydown', e => { keys[e.keyCode] = true; });
-document.addEventListener('keyup', e => { keys[e.keyCode] = false; });
+// --- キーボードイベント ---
+window.addEventListener('keydown', e => {
+    if (keys[e.keyCode]) return;
+    keys[e.keyCode] = true;
+    if (e.keyCode === 87 || e.keyCode === 32 || e.keyCode === 38) hardDrop();
+    if (e.keyCode === 69) playerRotate(1);
+    if (e.keyCode === 81) playerRotate(-1);
+    if (e.keyCode === 67 || e.keyCode === 16) playerHold();
+});
+
+window.addEventListener('keyup', e => {
+    keys[e.keyCode] = false;
+    if (dasTimers[e.keyCode] !== undefined) dasTimers[e.keyCode] = 0;
+});
+
+// --- マウスイベント ---
+canvas.addEventListener('mousedown', e => {
+    e.preventDefault();
+    if (e.button === 0) playerRotate(-1); // 左クリック：左回転
+    if (e.button === 2) playerRotate(1);  // 右クリック：右回転
+});
+
+// マウスホイールイベント：ホールド
+window.addEventListener('wheel', e => {
+    e.preventDefault(); // スクロール禁止
+    playerHold();
+}, { passive: false });
 
 function createPiece(type) {
     if (type === 'I') return [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]];
@@ -143,8 +169,8 @@ function playerRotate(dir) {
 
 function playerMove(dir) {
     player.pos.x += dir;
-    if (collide(arena, player)) { player.pos.x -= dir; }
-    else { player.lastOpWasRotate = false; resetLock(); }
+    if (collide(arena, player)) { player.pos.x -= dir; return false; }
+    else { player.lastOpWasRotate = false; resetLock(); return true; }
 }
 
 function collide(arena, p) {
@@ -213,7 +239,7 @@ function arenaSweep() {
 }
 
 function playerReset() {
-    while (nextQueue.length < 10) nextQueue = nextQueue.concat([...PIECE_TYPES].sort(() => Math.random() - 0.5));
+    while (nextQueue.length < 14) nextQueue = nextQueue.concat([...PIECE_TYPES].sort(() => Math.random() - 0.5));
     player.type = nextQueue.shift(); player.matrix = createPiece(player.type);
     player.pos.y = 0; player.pos.x = 3; player.rotation = 0; player.lastOpWasRotate = false;
     lockTimer = 0; moveCount = 0; canHold = true;
@@ -276,67 +302,51 @@ function draw() {
     }
 }
 
-function updateGamepad() {
-    const gps = navigator.getGamepads ? navigator.getGamepads() : [];
-    const gp = gps[0]; if (!gp) return;
-    document.getElementById('gp-status').innerText = `Gamepad: Connected`;
-    const bs = gp.buttons; const now = performance.now();
-    const just = (i) => bs[i] && bs[i].pressed && !prevButtons[i];
-    const moveInput = (bs[14].pressed || gp.axes[0] < -0.5) ? -1 : (bs[15].pressed || gp.axes[0] > 0.5) ? 1 : 0;
-    if (moveInput !== 0) {
-        const side = moveInput === -1 ? 'left' : 'right';
-        if (dasTimers[side] === 0) { playerMove(moveInput); dasTimers[side] = now; lastRepeat[side] = now; }
-        else if (now - dasTimers[side] > DAS_DELAY) {
-            if (now - lastRepeat[side] > ARR_SPEED) { playerMove(moveInput); lastRepeat[side] = now; }
+function handleInput(now) {
+    const directions = [
+        { key: 37, dir: -1 }, { key: 65, dir: -1 },
+        { key: 39, dir: 1 },  { key: 68, dir: 1 }
+    ];
+    directions.forEach(({key, dir}) => {
+        if (keys[key]) {
+            if (dasTimers[key] === 0) {
+                playerMove(dir);
+                dasTimers[key] = now;
+                lastRepeat[key] = now;
+            } else if (now - dasTimers[key] > DAS_DELAY) {
+                if (now - lastRepeat[key] > ARR_SPEED) {
+                    playerMove(dir);
+                    lastRepeat[key] = now;
+                }
+            }
         }
-    } else { dasTimers.left = 0; dasTimers.right = 0; }
-    if (bs[13].pressed) playerDrop();
-    if (just(12)) hardDrop();
-    if (just(0)) playerRotate(-1);
-    if (just(1) || just(3)) playerRotate(1);
-    if (just(4) || just(5)) playerHold();
-    prevButtons = bs.map(b => b.pressed);
+    });
 }
 
 function toggleShop() { const s = document.getElementById('shop-overlay'); s.style.display = s.style.display === 'flex' ? 'none' : 'flex'; }
 
 function buyTSpinTemplate() { 
     arena.forEach(r => r.fill(0)); 
-    const pattern = [
-        "1110111111", "1100111111", "1110111111", "1000111111", "1001111111", 
-        "1001111111", "1011111111", "1000111111", "1100111111", "1100111111", 
-        "1110111111", "1000111111", "1001111111", "1001111111", "1011111111", 
-        "1000000000", "1100000000", "0000000000", "0000000000", "0000000000"
-    ].reverse();
-    for(let y = 0; y < 20; y++) {
-        for(let x = 0; x < 10; x++) if (pattern[y] && pattern[y][x] === "1") arena[y][x] = 8;
-    }
-    // Tミノを7個連続で補充するように変更
+    const pattern = ["1110111111", "1100111111", "1110111111", "1000111111", "1001111111", "1001111111", "1011111111", "1000111111", "1100111111", "1100111111", "1110111111", "1000111111", "1001111111", "1001111111", "1011111111", "1000000000", "1100000000", "0000000000", "0000000000", "0000000000"].reverse();
+    for(let y = 0; y < 20; y++) { for(let x = 0; x < 10; x++) if (pattern[y] && pattern[y][x] === "1") arena[y][x] = 8; }
     nextQueue = Array(7).fill('T').concat(nextQueue);
     playerReset(); toggleShop(); 
 }
 
 function buyRenTemplate() { 
     arena.forEach(r => r.fill(0)); 
-    for(let y = 0; y < 20; y++) {
-        for(let x = 0; x < 10; x++) {
-            if (y === 19) { if (x !== 6) arena[y][x] = 8; } 
-            else { if (x < 3 || x > 6) arena[y][x] = 8; }
-        }
-    }
+    for(let y = 0; y < 20; y++) { for(let x = 0; x < 10; x++) { if (y === 19) { if (x !== 6) arena[y][x] = 8; } else { if (x < 3 || x > 6) arena[y][x] = 8; } } }
     playerReset(); toggleShop(); 
 }
 
 let dropCounter = 0, lastTime = 0;
 function update(time = 0) {
     const dt = time - lastTime; lastTime = time; dropCounter += dt;
-    updateGamepad();
-    if (keys[37] || keys[65]) { if(time % 100 < 20) playerMove(-1); }
-    if (keys[39] || keys[68]) { if(time % 100 < 20) playerMove(1); }
+    handleInput(time);
     if (collide(arena, {pos:{x:player.pos.x, y:player.pos.y+1}, matrix:player.matrix})) { 
         lockTimer += dt; if(lockTimer >= LOCK_DELAY) lockPiece(); 
     } else { 
-        let threshold = keys[40] ? 50 : 1000;
+        let threshold = (keys[40] || keys[83]) ? 50 : 1000;
         if (dropCounter > threshold) playerDrop(); 
     }
     draw(); requestAnimationFrame(update);
