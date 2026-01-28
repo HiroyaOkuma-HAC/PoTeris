@@ -4,43 +4,129 @@
     <meta charset="UTF-8">
     <title>Tetris Ultimate - Cyber Grid Edition</title>
     <style>
-        body { background: #0a0a0a; color: #fff; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; overflow: hidden; user-select: none; }
-        #game-layout { display: flex; gap: 20px; align-items: flex-start; }
+        body { 
+            background: #0a0a0a; 
+            background-position: center;
+            background-size: cover;
+            background-repeat: no-repeat;
+            color: #fff; 
+            font-family: 'Segoe UI', sans-serif; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            height: 100vh; 
+            margin: 0; 
+            overflow: hidden; 
+            user-select: none; 
+            transition: background-image 0.5s ease;
+        }
+
+        #game-layout { 
+            display: flex; 
+            gap: 20px; 
+            align-items: flex-start; 
+            background: rgba(0, 0, 0, 0.6); 
+            padding: 20px; 
+            border-radius: 15px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
         #game-container { position: relative; border: 4px solid #333; border-radius: 5px; box-shadow: 0 0 40px rgba(0, 210, 255, 0.2); }
-        canvas#tetris { display: block; background-color: #000; cursor: crosshair; }
+        canvas#tetris { display: block; background-color: rgba(0, 0, 0, 0.8); cursor: crosshair; }
+        
         .side-panel { display: flex; flex-direction: column; gap: 10px; width: 120px; }
-        .panel-box { background: #1a1a1a; border: 2px solid #444; border-radius: 5px; padding: 10px; text-align: center; }
+        .stats-panel { width: 150px; } /* 統計用の少し広いパネル */
+        .panel-box { background: rgba(26, 26, 26, 0.8); border: 2px solid #444; border-radius: 5px; padding: 10px; text-align: center; }
         .panel-title { font-size: 11px; color: #00d2ff; margin-bottom: 5px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+        
         #ren-container { height: 65px; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: transform 0.1s ease; }
         #ren-count { font-size: 40px; font-weight: bold; color: #ff9900; margin: 0; line-height: 1; text-shadow: 0 0 15px rgba(255, 153, 0, 0.5); }
         #ren-label { font-size: 12px; color: #aaa; margin: 0; font-weight: bold; }
         .bump { transform: scale(1.3); }
+        
         .slot { border: 2px solid #333; background: #000; height: 60px; display: flex; justify-content: center; align-items: center; }
         .sub-slots { display: grid; grid-template-rows: repeat(4, 35px); gap: 4px; margin-top: 5px; }
         .sub-slot { height: 35px; border: 1px solid #333; background: #000; border-radius: 4px; display: flex; justify-content: center; align-items: center; }
+        
         #score { font-size: 20px; font-weight: bold; color: #00ffcc; text-shadow: 0 0 10px rgba(0, 255, 204, 0.5); }
-        #shop-trigger { background: linear-gradient(135deg, #00d2ff, #ff00ff); border: none; border-radius: 25px; color: #fff; font-weight: bold; padding: 12px 30px; margin-bottom: 20px; cursor: pointer; box-shadow: 0 4px 15px rgba(0, 210, 255, 0.4); transition: 0.2s; text-transform: uppercase; }
-        #shop-trigger:hover { transform: scale(1.05); filter: brightness(1.2); }
-        #shop-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 100; justify-content: center; align-items: center; }
-        #shop-menu { background: #111; border: 3px solid #00d2ff; padding: 30px; border-radius: 15px; width: 400px; text-align: center; box-shadow: 0 0 50px rgba(0, 210, 255, 0.3); }
-        .shop-item { background: #222; border: 1px solid #444; border-radius: 10px; padding: 15px; margin: 10px 0; cursor: pointer; font-size: 18px; font-weight: bold; transition: 0.2s; }
-        .shop-item:hover { background: #333; border-color: #00d2ff; color: #00d2ff; }
-        .close-shop { margin-top: 20px; color: #aaa; cursor: pointer; }
+        
+        /* 統計テキストのスタイル */
+        .stat-row { display: flex; justify-content: space-between; font-size: 12px; margin: 2px 0; color: #ccc; border-bottom: 1px solid #333; }
+        .stat-val { color: #fff; font-weight: bold; }
+        .stat-high { color: #ffd700; }
+
+        #shop-trigger, #options-trigger { background: linear-gradient(135deg, #00d2ff, #ff00ff); border: none; border-radius: 25px; color: #fff; font-weight: bold; padding: 12px 30px; margin-bottom: 20px; cursor: pointer; box-shadow: 0 4px 15px rgba(0, 210, 255, 0.4); transition: 0.2s; text-transform: uppercase; }
+        #options-trigger { background: #333; padding: 12px 20px; font-size: 20px; line-height: 1; }
+        #shop-trigger:hover, #options-trigger:hover { transform: scale(1.05); filter: brightness(1.2); }
+        
+        .nav-bar { display: flex; gap: 10px; align-items: center; }
+
+        .overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 100; justify-content: center; align-items: center; backdrop-filter: blur(8px); }
+        .menu-card { background: #111; border: 3px solid #00d2ff; padding: 30px; border-radius: 15px; width: 420px; text-align: center; box-shadow: 0 0 50px rgba(0, 210, 255, 0.3); }
+        .menu-item { background: #222; border: 1px solid #444; border-radius: 10px; padding: 12px; margin: 8px 0; cursor: pointer; font-size: 16px; font-weight: bold; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; }
+        .menu-item:hover { border-color: #00d2ff; color: #00d2ff; }
+        
+        .url-input { width: 90%; padding: 8px; margin-top: 8px; background: #000; border: 1px solid #444; color: #00d2ff; border-radius: 5px; font-size: 12px; outline: none; }
+        .url-input:focus { border-color: #00d2ff; }
+        .close-btn { margin-top: 20px; color: #aaa; cursor: pointer; font-size: 14px; }
+        
+        .switch { position: relative; display: inline-block; width: 44px; height: 22px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #444; transition: .4s; border-radius: 22px; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #00d2ff; }
+        input:checked + .slider:before { transform: translateX(22px); }
     </style>
 </head>
 <body oncontextmenu="return false;">
 
-    <div id="gp-status" style="position:fixed; top:10px; right:10px; font-size:12px; color:#444;">SYSTEM READY // WASD / Mouse Wheel</div>
-    <button id="shop-trigger" onclick="toggleShop()">🛒 Template Database</button>
+    <div class="nav-bar">
+        <button id="shop-trigger" onclick="toggleShop()">🛒 Template Database</button>
+        <button id="options-trigger" onclick="toggleOptions()">☰</button>
+    </div>
 
-    <div id="shop-overlay">
-        <div id="shop-menu">
+    <div id="shop-overlay" class="overlay">
+        <div class="menu-card">
             <h2 style="color:#00d2ff; margin-top:0;">✨ SELECT SEQUENCE ✨</h2>
-            <div class="shop-item" style="color:#ffd700;" onclick="buyTSpinTemplate()">T-Spin Triple Tower</div>
-            <div class="shop-item" style="color:#ffcc00;" onclick="buyHachimitsu()">Hachimitsu Cannon</div>
-            <div class="shop-item" style="color:#00ff88;" onclick="buyOpeningTD()">Opening TD Attack</div>
-            <div class="shop-item" style="color:#00d2ff;" onclick="buyRenTemplate()">4-Wide REN</div>
-            <div class="close-shop" onclick="toggleShop()">[ CANCEL ]</div>
+            <div class="menu-item" style="color:#ffd700;" onclick="buyTSpinTemplate()">T-Spin Triple Tower</div>
+            <div class="menu-item" style="color:#ffcc00;" onclick="buyHachimitsu()">Hachimitsu Cannon</div>
+            <div class="menu-item" style="color:#00ff88;" onclick="buyOpeningTD()">Opening TD Attack</div>
+            <div class="menu-item" style="color:#00d2ff;" onclick="buyRenTemplate()">4-Wide REN</div>
+            <div class="close-btn" onclick="toggleShop()">[ CANCEL ]</div>
+        </div>
+    </div>
+
+    <div id="options-overlay" class="overlay">
+        <div class="menu-card">
+            <h2 style="color:#ff00ff; margin-top:0;">⚙️ OPTIONS</h2>
+            <div class="menu-item" style="flex-direction: column; align-items: flex-start; cursor: default;">
+                <div style="display:flex; justify-content: space-between; width:100%;">
+                    <span>Custom Background URL</span>
+                    <span style="font-size:10px; color:#666;">Apply on input</span>
+                </div>
+                <input type="text" id="bg-url-input" class="url-input" placeholder="https://image-url.jpg" oninput="changeBackground(this.value)">
+            </div>
+            <div class="menu-item" onclick="resetGame()">
+                <span>RETRY GAME</span>
+                <span style="font-size: 12px; color: #ff4444;">↻</span>
+            </div>
+            <div class="menu-item">
+                <span>HardDrop Shake</span>
+                <label class="switch">
+                    <input type="checkbox" id="shake-harddrop" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="menu-item">
+                <span>Line Clear Shake</span>
+                <label class="switch">
+                    <input type="checkbox" id="shake-line" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="close-btn" onclick="toggleOptions()">[ CLOSE & RESUME ]</div>
         </div>
     </div>
 
@@ -48,9 +134,6 @@
         <div class="side-panel">
             <div class="panel-box"><div class="panel-title">HOLD</div><div class="slot"><canvas id="hold-canvas" width="60" height="60"></canvas></div></div>
             <div class="panel-box"><div class="panel-title">SCORE</div><div id="score">0</div></div>
-        </div>
-        <div id="game-container"><canvas id="tetris" width="200" height="400"></canvas></div>
-        <div class="side-panel">
             <div class="panel-box">
                 <div class="panel-title">COMBO</div>
                 <div id="ren-container">
@@ -58,6 +141,11 @@
                     <p id="ren-label">REN</p>
                 </div>
             </div>
+        </div>
+
+        <div id="game-container"><canvas id="tetris" width="200" height="400"></canvas></div>
+
+        <div class="side-panel stats-panel">
             <div class="panel-box">
                 <div class="panel-title">NEXT</div>
                 <div class="slot"><canvas id="next-1" width="60" height="60"></canvas></div>
@@ -68,10 +156,30 @@
                     <div class="sub-slot"><canvas id="next-5" width="35" height="35"></canvas></div>
                 </div>
             </div>
+
+            <div class="panel-box">
+                <div class="panel-title">STATISTICS</div>
+                <div class="stat-row"><span>HIGH SCORE</span><span id="stat-high-score" class="stat-val stat-high">0</span></div>
+                <div class="stat-row"><span>MAX REN</span><span id="stat-max-ren" class="stat-val">0</span></div>
+                <div class="stat-row"><span>LINES</span><span id="stat-total-lines" class="stat-val">0</span></div>
+                <div class="stat-row"><span>TETRIS</span><span id="stat-tetris" class="stat-val">0</span></div>
+                <div class="stat-row"><span>TS (S)</span><span id="stat-ts" class="stat-val">0</span></div>
+                <div class="stat-row"><span>TD (D)</span><span id="stat-td" class="stat-val">0</span></div>
+                <div class="stat-row"><span>TT (T)</span><span id="stat-tt" class="stat-val">0</span></div>
+                <div class="stat-row"><span>BTB</span><span id="stat-btb" class="stat-val">0</span></div>
+            </div>
         </div>
     </div>
 
 <script>
+function changeBackground(url) {
+    if (url.trim() === "") {
+        document.body.style.backgroundImage = "none";
+    } else {
+        document.body.style.backgroundImage = `url('${url}')`;
+    }
+}
+
 const canvas = document.getElementById('tetris');
 const context = canvas.getContext('2d');
 const scoreElement = document.getElementById('score');
@@ -79,6 +187,18 @@ const renCountElement = document.getElementById('ren-count');
 const renContainer = document.getElementById('ren-container');
 const holdCanvas = document.getElementById('hold-canvas').getContext('2d');
 const nextCtxs = [1,2,3,4,5].map(i => document.getElementById(i===1?'next-1':`next-${i}`).getContext('2d'));
+
+// 統計表示用要素
+const statElems = {
+    highScore: document.getElementById('stat-high-score'),
+    maxRen: document.getElementById('stat-max-ren'),
+    totalLines: document.getElementById('stat-total-lines'),
+    tetris: document.getElementById('stat-tetris'),
+    ts: document.getElementById('stat-ts'),
+    td: document.getElementById('stat-td'),
+    tt: document.getElementById('stat-tt'),
+    btb: document.getElementById('stat-btb')
+};
 
 context.scale(20, 20);
 holdCanvas.scale(15, 15);
@@ -89,30 +209,42 @@ const COLORS = [null, '#FF0D72', '#0DC2FF', '#0DFF72', '#F538FF', '#FF8E0D', '#F
 const PIECE_TYPES = ['I', 'L', 'J', 'O', 'Z', 'S', 'T'];
 
 const SRS_DATA = {
-    "0->1": [[0,0], [-1,0], [-1,1], [0,-2], [-1,-2]],
-    "1->0": [[0,0], [1,0], [1,-1], [0,2], [1,2]],
-    "1->2": [[0,0], [1,0], [1,-1], [0,2], [1,2]],
-    "2->1": [[0,0], [-1,0], [-1,1], [0,-2], [-1,-2]],
-    "2->3": [[0,0], [1,0], [1,1], [0,-2], [1,-2]],
-    "3->2": [[0,0], [-1,0], [-1,-1], [0,2], [-1,2]],
-    "3->0": [[0,0], [-1,0], [-1,-1], [0,2], [-1,2]],
-    "0->3": [[0,0], [1,0], [1,1], [0,-2], [1,-2]]
+    "0->1": [[0,0], [-1,0], [-1,1], [0,-2], [-1,-2]], "1->0": [[0,0], [1,0], [1,-1], [0,2], [1,2]],
+    "1->2": [[0,0], [1,0], [1,-1], [0,2], [1,2]], "2->1": [[0,0], [-1,0], [-1,1], [0,-2], [-1,-2]],
+    "2->3": [[0,0], [1,0], [1,1], [0,-2], [1,-2]], "3->2": [[0,0], [-1,0], [-1,-1], [0,2], [-1,2]],
+    "3->0": [[0,0], [-1,0], [-1,-1], [0,2], [-1,2]], "0->3": [[0,0], [1,0], [1,1], [0,-2], [1,-2]]
 };
 
 let arena = Array.from({length: 20}, () => new Array(10).fill(0));
 let nextQueue = [], holdPiece = null, canHold = true, particles = [], lineFlashes = [], dropBeams = [], gridWaves = [];
-let tSpinAnnounce = { text: '', life: 0, isBtB: false };
-let lockTimer = 0, moveCount = 0, btbActive = false, shakeTimer = 0, renCount = -1;
+let tSpinAnnounce = { text: '', life: 0, isBtB: false, isPerfect: false };
+let fieldFlash = 0; 
+let lockTimer = 0, moveCount = 0, btbActive = false, shakeTimer = 0, renCount = -1, isPaused = false;
 const LOCK_DELAY = 1000, MAX_MOVES = 15;
 const player = { pos: {x: 3, y: 0}, matrix: null, type: null, rotation: 0, score: 0, lastOpWasRotate: false };
 
-const DAS_DELAY = 160; 
-const ARR_SPEED = 30;
+// 統計データ管理
+let stats = {
+    highScore: 0, maxRen: 0, totalLines: 0, tetris: 0, ts: 0, td: 0, tt: 0, btb: 0
+};
+
+function updateStatsUI() {
+    statElems.highScore.innerText = stats.highScore;
+    statElems.maxRen.innerText = stats.maxRen;
+    statElems.totalLines.innerText = stats.totalLines;
+    statElems.tetris.innerText = stats.tetris;
+    statElems.ts.innerText = stats.ts;
+    statElems.td.innerText = stats.td;
+    statElems.tt.innerText = stats.tt;
+    statElems.btb.innerText = stats.btb;
+}
+
+const DAS_DELAY = 160, ARR_SPEED = 30;
 let keys = {};
-let dasTimers = { 37: 0, 39: 0, 65: 0, 68: 0 };
-let lastRepeat = { 37: 0, 39: 0, 65: 0, 68: 0 };
+let dasTimers = { 37: 0, 39: 0, 65: 0, 68: 0 }, lastRepeat = { 37: 0, 39: 0, 65: 0, 68: 0 };
 
 window.addEventListener('keydown', e => {
+    if (isPaused && e.keyCode !== 27) return; 
     if (keys[e.keyCode]) return;
     keys[e.keyCode] = true;
     if (e.keyCode === 87 || e.keyCode === 32 || e.keyCode === 38) hardDrop();
@@ -121,8 +253,8 @@ window.addEventListener('keydown', e => {
     if (e.keyCode === 67 || e.keyCode === 16) playerHold();
 });
 window.addEventListener('keyup', e => { keys[e.keyCode] = false; if (dasTimers[e.keyCode] !== undefined) dasTimers[e.keyCode] = 0; });
-canvas.addEventListener('mousedown', e => { e.preventDefault(); if (e.button === 0) playerRotate(-1); if (e.button === 2) playerRotate(1); });
-window.addEventListener('wheel', e => { e.preventDefault(); playerHold(); }, { passive: false });
+canvas.addEventListener('mousedown', e => { e.preventDefault(); if (isPaused) return; if (e.button === 0) playerRotate(-1); if (e.button === 2) playerRotate(1); });
+window.addEventListener('wheel', e => { e.preventDefault(); if (!isPaused) playerHold(); }, { passive: false });
 
 function createPiece(type) {
     if (type === 'I') return [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]];
@@ -147,16 +279,9 @@ function playerRotate(dir) {
     rotateMatrix(player.matrix, dir);
     const kicks = SRS_DATA[`${startRot}->${nextRot}`] || [[0,0]];
     for (const kick of kicks) {
-        player.pos.x = pos.x + kick[0];
-        player.pos.y = pos.y - kick[1];
-        if (!collide(arena, player)) {
-            player.rotation = nextRot;
-            player.lastOpWasRotate = true;
-            resetLock();
-            return;
-        }
-        player.pos.x = pos.x;
-        player.pos.y = pos.y;
+        player.pos.x = pos.x + kick[0]; player.pos.y = pos.y - kick[1];
+        if (!collide(arena, player)) { player.rotation = nextRot; player.lastOpWasRotate = true; resetLock(); return; }
+        player.pos.x = pos.x; player.pos.y = pos.y;
     }
     rotateMatrix(player.matrix, -dir);
 }
@@ -170,9 +295,8 @@ function collide(arena, p) {
     for (let y = 0; y < m.length; ++y) {
         for (let x = 0; x < m[y].length; ++x) {
             if (m[y][x] !== 0) {
-                let ay = y + o.y;
-                let ax = x + o.x;
-                if (ax < 0 || ax >= 10 || ay >= 20 || (ay >= 0 && arena[ay][ax] !== 0)) return true;
+                let ay_check = y + o.y, ax_check = x + o.x;
+                if (ax_check < 0 || ax_check >= 10 || ay_check >= 20 || (ay_check >= 0 && arena[ay_check][ax_check] !== 0)) return true;
             }
         }
     }
@@ -185,18 +309,17 @@ function playerHold() {
     canHold = false; drawSide();
 }
 function spawnSpark(x, y, count = 10, color = '255, 255, 255') {
-    for(let i=0; i<count; i++) {
-        particles.push({ x: x, y: y, vx: (Math.random() - 0.5) * 0.5, vy: (Math.random() - 0.5) * 0.5, life: 1.0, size: Math.random() * 0.18 + 0.05, color: color });
-    }
+    for(let i=0; i<count; i++) particles.push({ x: x, y: y, vx: (Math.random() - 0.5) * 0.5, vy: (Math.random() - 0.5) * 0.5, life: 1.0, size: Math.random() * 0.18 + 0.05, color: color });
 }
 function hexToRgb(hex) { if (!hex) return "255,255,255"; const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16); return `${r}, ${g}, ${b}`; }
 
 function arenaSweep() {
-    let lines = 0;
-    let isTSpin = false;
+    let lines = 0, isTSpin = false;
     if (player.type === 'T' && player.lastOpWasRotate) {
         let corners = 0; const cx = player.pos.x + 1; const cy = player.pos.y + 1;
-        [[cx-1, cy-1], [cx+1, cy-1], [cx-1, cy+1], [cx+1, cy+1]].forEach(([x, y]) => { if (x < 0 || x >= 10 || y >= 20 || (y >= 0 && arena[y][x] !== 0)) corners++; });
+        [[cx-1, cy-1], [cx+1, cy-1], [cx-1, cy+1], [cx+1, cy+1]].forEach(([x, y]) => { 
+            if (x < 0 || x >= 10 || y >= 20 || (y >= 0 && arena[y][x] !== 0)) corners++; 
+        });
         if (corners >= 3) isTSpin = true;
     }
     for (let y = arena.length - 1; y >= 0; --y) {
@@ -208,17 +331,53 @@ function arenaSweep() {
         }
     }
     if (lines > 0) {
-        renCount++; if (renCount > 0) { renCountElement.innerText = renCount; renContainer.classList.add('bump'); setTimeout(() => renContainer.classList.remove('bump'), 100); const heat = Math.min(renCount * 20, 150); renCountElement.style.color = `rgb(255, ${255 - heat}, 0)`; }
+        renCount++; 
+        stats.totalLines += lines;
+        if (renCount > stats.maxRen) stats.maxRen = renCount;
+
+        if (renCount > 0) { 
+            renCountElement.innerText = renCount; 
+            renContainer.classList.add('bump'); 
+            setTimeout(() => renContainer.classList.remove('bump'), 100); 
+            const heat = Math.min(renCount * 20, 150); 
+            renCountElement.style.color = `rgb(255, ${255 - heat}, 0)`; 
+        }
+        
         const isPowerMove = isTSpin || lines === 4;
         let b = [0, 100, 300, 500, 800][lines];
-        if (renCount > 0) { b += renCount * 50; }
+        if (renCount > 0) b += renCount * 50;
+        
+        let isPerfectClear = arena.every(row => row.every(v => v === 0));
+
         if (isPowerMove) {
-            let bonusText = ""; if (btbActive) { b *= 1.5; bonusText = "🔥 BtB "; }
-            if (isTSpin) { const names = ["", "SINGLE", "DOUBLE", "TRIPLE"]; tSpinAnnounce = { text: `${bonusText}T-SPIN ${names[lines]}!`, life: 100, isBtB: btbActive }; b *= 2; }
-            else if (lines === 4) { tSpinAnnounce = { text: `${bonusText}TETRIS!`, life: 100, isBtB: btbActive }; }
-            btbActive = true; shakeTimer = 15;
-        } else { btbActive = false; }
-        player.score += Math.floor(b); scoreElement.innerText = player.score;
+            let bonusText = ""; 
+            if (btbActive) { b *= 1.5; bonusText = "🔥 BtB "; stats.btb++; }
+            if (isTSpin) { 
+                const names = ["", "SINGLE", "DOUBLE", "TRIPLE"]; 
+                tSpinAnnounce = { text: `${bonusText}T-SPIN ${names[lines]}!`, life: 100, isBtB: btbActive, isPerfect: false }; 
+                b *= 2; 
+                // 統計加算
+                if(lines === 1) stats.ts++; else if(lines === 2) stats.td++; else if(lines === 3) stats.tt++;
+            }
+            else if (lines === 4) { 
+                tSpinAnnounce = { text: `${bonusText}TETRIS!`, life: 100, isBtB: btbActive, isPerfect: false }; 
+                stats.tetris++;
+            }
+            btbActive = true; if (document.getElementById('shake-line').checked) shakeTimer = 15;
+        } else { btbActive = false; if (document.getElementById('shake-line').checked) shakeTimer = 5; }
+
+        if (isPerfectClear) {
+            b += 3000;
+            tSpinAnnounce = { text: "PERFECT CLEAR!!", life: 150, isBtB: false, isPerfect: true, bonus: "+3000" };
+            shakeTimer = 30;
+            fieldFlash = 40; 
+            for(let i=0; i<80; i++) spawnSpark(Math.random()*10, Math.random()*20, 1, "255, 215, 0"); 
+        }
+
+        player.score += Math.floor(b); 
+        if (player.score > stats.highScore) stats.highScore = player.score;
+        scoreElement.innerText = player.score;
+        updateStatsUI();
     } else { renCount = -1; renCountElement.innerText = "0"; renCountElement.style.color = "#ff9900"; }
 }
 
@@ -227,82 +386,107 @@ function playerReset() {
     player.type = nextQueue.shift(); player.matrix = createPiece(player.type);
     player.pos.y = 0; player.pos.x = 3; player.rotation = 0; player.lastOpWasRotate = false;
     lockTimer = 0; moveCount = 0; canHold = true;
-    if (collide(arena, player)) { arena.forEach(row => row.fill(0)); player.score = 0; scoreElement.innerText = 0; btbActive = false; renCount = -1; renCountElement.innerText = "0"; }
+    if (collide(arena, player)) resetGame();
     drawSide();
 }
 function lockPiece() { player.matrix.forEach((row, y) => { row.forEach((v, x) => { if (v !== 0) arena[y + player.pos.y][x + player.pos.x] = v; }); }); arenaSweep(); playerReset(); }
 function playerDrop() { player.pos.y++; if (collide(arena, player)) { player.pos.y--; } else { player.lastOpWasRotate = false; lockTimer = 0; } dropCounter = 0; }
-function hardDrop() { while(!collide(arena, {pos:{x:player.pos.x, y:player.pos.y+1}, matrix:player.matrix})) player.pos.y++; player.matrix.forEach((row, dy) => { row.forEach((v, dx) => { if (v !== 0) { const pieceColor = hexToRgb(COLORS[PIECE_TYPES.indexOf(player.type) + 1]); dropBeams.push({ x: player.pos.x + dx, y: player.pos.y + dy, life: 15, color: pieceColor }); spawnSpark(player.pos.x + dx + 0.5, player.pos.y + dy + 0.5, 5, "255, 255, 255"); } }); }); shakeTimer = 5; lockPiece(); }
+function hardDrop() { while(!collide(arena, {pos:{x:player.pos.x, y:player.pos.y+1}, matrix:player.matrix})) player.pos.y++; player.matrix.forEach((row, dy) => { row.forEach((v, dx) => { if (v !== 0) { const pieceColor = hexToRgb(COLORS[PIECE_TYPES.indexOf(player.type) + 1]); dropBeams.push({ x: player.pos.x + dx, y: player.pos.y + dy, life: 15, color: pieceColor }); spawnSpark(player.pos.x + dx + 0.5, player.pos.y + dy + 0.5, 5, "255, 255, 255"); } }); }); if (document.getElementById('shake-harddrop').checked) shakeTimer = 5; lockPiece(); }
 function getGhostPos() { let ghost = { pos: {x: player.pos.x, y: player.pos.y}, matrix: player.matrix }; while (!collide(arena, { pos: {x: ghost.pos.x, y: ghost.pos.y + 1}, matrix: ghost.matrix })) { ghost.pos.y++; } return ghost.pos; }
 function drawMatrix(m, o, ctx, isGhost = false) { m.forEach((r, y) => { r.forEach((v, x) => { if (v !== 0) { ctx.fillStyle = isGhost ? 'rgba(255,255,255,0.15)' : COLORS[v]; ctx.fillRect(x + o.x, y + o.y, 1, 1); ctx.lineWidth = 0.05; ctx.strokeStyle = isGhost ? 'rgba(0,210,255,0.3)' : "white"; ctx.strokeRect(x+o.x, y+o.y, 1, 1); } }); }); }
 function drawSide() { holdCanvas.clearRect(0,0,60,60); if(holdPiece) drawMatrix(createPiece(holdPiece), {x:0.5, y:0.5}, holdCanvas); nextCtxs.forEach((ctx, i) => { ctx.clearRect(0,0,60,60); if(nextQueue[i]) drawMatrix(createPiece(nextQueue[i]), {x:0.5, y:0.5}, ctx); }); }
 
 function draw() {
     if (shakeTimer > 0) { const sx = (Math.random() - 0.5) * 0.5; const sy = (Math.random() - 0.5) * 0.5; canvas.style.transform = `translate(${sx}rem, ${sy}rem)`; shakeTimer--; } else { canvas.style.transform = `translate(0, 0)`; }
-    context.fillStyle = '#000'; context.fillRect(0, 0, canvas.width, canvas.height);
-    context.strokeStyle = 'rgba(0, 210, 255, 0.05)'; context.lineWidth = 0.02;
+    context.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (fieldFlash > 0) {
+        context.fillStyle = `rgba(0, 210, 255, ${fieldFlash / 80})`;
+        context.fillRect(0, 0, 10, 20);
+        fieldFlash--;
+    }
+
+    context.strokeStyle = 'rgba(0, 210, 255, 0.08)'; context.lineWidth = 0.02;
     for(let x=0; x<=10; x++) { context.beginPath(); context.moveTo(x, 0); context.lineTo(x, 20); context.stroke(); }
     for(let y=0; y<=20; y++) { context.beginPath(); context.moveTo(0, y); context.lineTo(10, y); context.stroke(); }
-    gridWaves = gridWaves.filter(w => { const alpha = w.life / 30; context.strokeStyle = `rgba(0, 210, 255, ${alpha * 0.4})`; context.lineWidth = 0.1; for(let i=-2; i<=2; i++) { let rowY1 = w.y + i - Math.floor(w.radius); let rowY2 = w.y + i + Math.floor(w.radius); if(rowY1 >= 0 && rowY1 < 20) { context.beginPath(); context.moveTo(0, rowY1); context.lineTo(10, rowY1); context.stroke(); } if(rowY2 >= 0 && rowY2 < 20) { context.beginPath(); context.moveTo(0, rowY2); context.lineTo(10, rowY2); context.stroke(); } } w.radius += 0.8; w.life--; return w.life > 0; });
+    gridWaves = gridWaves.filter(w => { const alpha = w.life / 30; context.strokeStyle = `rgba(0, 210, 255, ${alpha * 0.4})`; context.lineWidth = 0.1; for(let i=-2; i<=2; i++) { let r1 = w.y + i - Math.floor(w.radius), r2 = w.y + i + Math.floor(w.radius); if(r1 >= 0 && r1 < 20) { context.beginPath(); context.moveTo(0, r1); context.lineTo(10, r1); context.stroke(); } if(r2 >= 0 && r2 < 20) { context.beginPath(); context.moveTo(0, r2); context.lineTo(10, r2); context.stroke(); } } w.radius += 0.8; w.life--; return w.life > 0; });
     dropBeams = dropBeams.filter(b => { const alpha = b.life / 15; const grad = context.createLinearGradient(0, 0, 0, b.y + 1); grad.addColorStop(0, `rgba(${b.color}, 0)`); grad.addColorStop(1, `rgba(${b.color}, ${alpha * 0.5})`); context.fillStyle = grad; context.fillRect(b.x, 0, 1, b.y + 1); context.fillStyle = `rgba(255, 255, 255, ${alpha})`; context.fillRect(b.x + 0.4, 0, 0.2, b.y + 1); b.life--; return b.life > 0; });
     drawMatrix(arena, {x:0, y:0}, context); drawMatrix(player.matrix, getGhostPos(), context, true); drawMatrix(player.matrix, player.pos, context);
     lineFlashes = lineFlashes.filter(f => { context.fillStyle=`rgba(255,255,255,${f.life/10})`; context.fillRect(0, f.y, 10, 1); f.life--; return f.life > 0; });
     particles = particles.filter(p => { p.x += p.vx; p.y += p.vy; p.life -= 0.025; context.fillStyle = `rgba(${p.color}, ${p.life})`; context.beginPath(); context.arc(p.x, p.y, p.size, 0, Math.PI * 2); context.fill(); return p.life > 0; });
-    if(tSpinAnnounce.life > 0) { context.save(); context.fillStyle= tSpinAnnounce.isBtB ? `rgba(255, 215, 0, ${tSpinAnnounce.life/100})` : `rgba(0, 255, 204, ${tSpinAnnounce.life/100})`; context.font="bold 1.2px Arial"; context.textAlign="center"; context.fillText(tSpinAnnounce.text, 5, 8); context.restore(); tSpinAnnounce.life -= 1.5; }
-}
-function handleInput(now) { const directions = [{ key: 37, dir: -1 }, { key: 65, dir: -1 }, { key: 39, dir: 1 }, { key: 68, dir: 1 }]; directions.forEach(({key, dir}) => { if (keys[key]) { if (dasTimers[key] === 0) { playerMove(dir); dasTimers[key] = now; lastRepeat[key] = now; } else if (now - dasTimers[key] > DAS_DELAY) { if (now - lastRepeat[key] > ARR_SPEED) { playerMove(dir); lastRepeat[key] = now; } } } }); }
-
-function toggleShop() { const s = document.getElementById('shop-overlay'); s.style.display = s.style.display === 'flex' ? 'none' : 'flex'; }
-
-// テンプレート関数
-function buyTSpinTemplate() { arena.forEach(r => r.fill(0)); const pattern = ["1110111111", "1100111111", "1110111111", "1000111111", "1001111111", "1001111111", "1011111111", "1000111111", "1100111111", "1100111111", "1110111111", "1000111111", "1001111111", "1001111111", "1011111111", "1000000000", "1100000000", "0000000000", "0000000000", "0000000000"].reverse(); for(let y = 0; y < 20; y++) { for(let x = 0; x < 10; x++) if (pattern[y] && pattern[y][x] === "1") arena[y][x] = 8; } nextQueue = Array(7).fill('T').concat(nextQueue); playerReset(); toggleShop(); }
-function buyRenTemplate() { arena.forEach(r => r.fill(0)); for(let y = 0; y < 20; y++) { for(let x = 0; x < 10; x++) { if (y === 19) { if (x !== 6) arena[y][x] = 8; } else { if (x < 3 || x > 6) arena[y][x] = 8; } } } playerReset(); toggleShop(); }
-function buyHachimitsu() { arena.forEach(r => r.fill(0)); const pattern = ["1111000000", "1111001100", "1110001111", "1110111111", "1110011111", "1110111111", "1111011111"].reverse(); for(let y = 0; y < pattern.length; y++) { for(let x = 0; x < 10; x++) { if (pattern[y][x] === "1") arena[19 - y][x] = 8; } } nextQueue = ['T', 'T', 'I', 'S', 'Z', 'O', 'L', 'J'].concat(nextQueue); playerReset(); toggleShop(); }
-
-// 【究極版】開幕TD生成 ＆ NEXT制御 ⚡
-function buyOpeningTD() {
-    arena.forEach(r => r.fill(0));
     
-    // 地形生成
-    const pattern = [
-        "0001110000", // y=16
-        "1001111000", // y=17
-        "1000111111", // y=18
-        "1101111111"  // y=19
-    ];
-
-    for(let i = 0; i < pattern.length; i++) {
-        const yCoord = 19 - (pattern.length - 1 - i); 
-        for(let x = 0; x < 10; x++) {
-            if (pattern[i][x] === "1") arena[yCoord][x] = 8; 
+    if(tSpinAnnounce.life > 0) { 
+        context.save(); 
+        context.textAlign = "center"; 
+        if (tSpinAnnounce.isPerfect) {
+            context.fillStyle = `rgba(255, 215, 0, ${tSpinAnnounce.life/150})`; 
+            context.font = "bold 1.8px 'Segoe UI'";
+            context.fillText("PERFECT", 5, 8.5); 
+            context.fillText("CLEAR!!", 5, 10.5);
+            context.font = "bold 1.0px 'Segoe UI'";
+            context.fillText(tSpinAnnounce.bonus, 5, 12.5);
+        } else {
+            context.fillStyle = tSpinAnnounce.isBtB ? `rgba(255, 215, 0, ${tSpinAnnounce.life/100})` : `rgba(0, 255, 204, ${tSpinAnnounce.life/100})`; 
+            context.font = "bold 1.2px Arial";
+            context.fillText(tSpinAnnounce.text, 5, 8); 
         }
+        context.restore(); 
+        tSpinAnnounce.life -= 1.5; 
     }
-
-    // NEXTの完全制御
-    // 1. まずTを1回
-    const firstT = ['T'];
-    // 2. 次にS, Z, Jをシャッフル
-    const middleGroup = ['S', 'Z', 'J'].sort(() => Math.random() - 0.5);
-    // 3. 次にO, L, Iをシャッフル
-    const lastGroup = ['O', 'L', 'I'].sort(() => Math.random() - 0.5);
-    
-    // これらを繋げて、その後に通常の7種ランダムを足す
-    const openingSequence = [...firstT, ...middleGroup, ...lastGroup];
-    nextQueue = openingSequence.concat([...PIECE_TYPES].sort(() => Math.random() - 0.5));
-
-    playerReset();
-    toggleShop();
 }
+
+function handleInput(now) { 
+    if (isPaused) return;
+    [{ key: 37, dir: -1 }, { key: 65, dir: -1 }, { key: 39, dir: 1 }, { key: 68, dir: 1 }].forEach(({key, dir}) => { 
+        if (keys[key]) { 
+            if (dasTimers[key] === 0) { playerMove(dir); dasTimers[key] = now; lastRepeat[key] = now; } 
+            else if (now - dasTimers[key] > DAS_DELAY) { if (now - lastRepeat[key] > ARR_SPEED) { playerMove(dir); lastRepeat[key] = now; } } 
+        } 
+    }); 
+}
+
+function toggleShop() { const s = document.getElementById('shop-overlay'); isPaused = (s.style.display !== 'flex'); s.style.display = isPaused ? 'flex' : 'none'; }
+function toggleOptions() { const o = document.getElementById('options-overlay'); isPaused = (o.style.display !== 'flex'); o.style.display = isPaused ? 'flex' : 'none'; }
+
+function resetGame() { 
+    arena.forEach(row => row.fill(0)); 
+    player.score = 0; scoreElement.innerText = 0; 
+    btbActive = false; renCount = -1; 
+    renCountElement.innerText = "0"; renCountElement.style.color = "#ff9900"; 
+    holdPiece = null; nextQueue = []; 
+    // 統計のうち累計スコア以外をリセット（お好みで調整）
+    stats.maxRen = 0; stats.totalLines = 0; stats.tetris = 0; stats.ts = 0; stats.td = 0; stats.tt = 0; stats.btb = 0;
+    updateStatsUI();
+    playerReset(); fieldFlash = 0; 
+    if (document.getElementById('options-overlay').style.display === 'flex') toggleOptions(); 
+}
+
+function prepareTemplate() { 
+    arena.forEach(row => row.fill(0)); 
+    player.score = 0; scoreElement.innerText = 0; 
+    btbActive = false; renCount = -1; 
+    renCountElement.innerText = "0"; renCountElement.style.color = "#ff9900"; 
+    holdPiece = null; nextQueue = []; 
+}
+
+function buyTSpinTemplate() { prepareTemplate(); const pattern = ["1110111111", "1100111111", "1110111111", "1000111111", "1001111111", "1001111111", "1011111111", "1000111111", "1100111111", "1100111111", "1110111111", "1000111111", "1001111111", "1001111111", "1011111111", "1000000000", "1100000000", "0000000000", "0000000000", "0000000000"].reverse(); for(let y = 0; y < 20; y++) { for(let x = 0; x < 10; x++) if (pattern[y] && pattern[y][x] === "1") arena[y][x] = 8; } nextQueue = Array(14).fill('T').concat(nextQueue); playerReset(); toggleShop(); }
+function buyRenTemplate() { prepareTemplate(); for(let y = 0; y < 20; y++) { for(let x = 0; x < 10; x++) { if (y === 19) { if (x !== 6) arena[y][x] = 8; } else { if (x < 3 || x > 6) arena[y][x] = 8; } } } playerReset(); toggleShop(); }
+function buyHachimitsu() { prepareTemplate(); const pattern = ["1111000000", "1111001100", "1110001111", "1110111111", "1110011111", "1110111111", "1111011111"].reverse(); for(let y = 0; y < pattern.length; y++) { for(let x = 0; x < 10; x++) if (pattern[y][x] === "1") arena[19 - y][x] = 8; } nextQueue = ['T', 'T', 'I', 'S', 'Z', 'O', 'L', 'J'].concat(nextQueue); playerReset(); toggleShop(); }
+function buyOpeningTD() { prepareTemplate(); const pattern = ["0001110000", "1001111000", "1000111111", "1101111111"]; for(let i = 0; i < pattern.length; i++) { const yCoord = 19 - (pattern.length - 1 - i); for(let x = 0; x < 10; x++) if (pattern[i][x] === "1") arena[yCoord][x] = 8; } const openingSequence = ['T', ...(['S', 'Z', 'J'].sort(() => Math.random() - 0.5)), ...(['O', 'L', 'I'].sort(() => Math.random() - 0.5))]; nextQueue = openingSequence.concat([...PIECE_TYPES].sort(() => Math.random() - 0.5)); playerReset(); toggleShop(); }
 
 let dropCounter = 0, lastTime = 0;
 function update(time = 0) {
-    const dt = time - lastTime; lastTime = time; dropCounter += dt;
-    handleInput(time);
-    if (collide(arena, {pos:{x:player.pos.x, y:player.pos.y+1}, matrix:player.matrix})) { lockTimer += dt; if(lockTimer >= LOCK_DELAY) lockPiece(); }
-    else { let threshold = (keys[40] || keys[83]) ? 50 : 1000; if (dropCounter > threshold) playerDrop(); }
+    const dt = time - lastTime; lastTime = time; 
+    if (!isPaused) {
+        dropCounter += dt; handleInput(time);
+        if (collide(arena, {pos:{x:player.pos.x, y:player.pos.y+1}, matrix:player.matrix})) { lockTimer += dt; if(lockTimer >= LOCK_DELAY) lockPiece(); } 
+        else { let threshold = (keys[40] || keys[83]) ? 50 : 1000; if (dropCounter > threshold) playerDrop(); }
+    }
     draw(); requestAnimationFrame(update);
 }
-playerReset(); update();
+playerReset(); 
+updateStatsUI();
+update();
 </script>
 </body>
 </html>
