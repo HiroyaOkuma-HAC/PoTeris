@@ -1,1 +1,357 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Tetris Ultimate - Pro Input Edition</title>
+    <style>
+        body { background: #1a1a1a; color: #fff; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; overflow: hidden; user-select: none; }
+        #game-layout { display: flex; gap: 20px; align-items: flex-start; }
+        #game-container { position: relative; border: 4px solid #333; border-radius: 5px; box-shadow: 0 0 30px rgba(0,0,0,0.7); }
+        canvas#tetris { display: block; background-color: #000; cursor: crosshair; }
+        
+        .side-panel { display: flex; flex-direction: column; gap: 10px; width: 120px; }
+        .panel-box { background: #2a2a2a; border: 2px solid #444; border-radius: 5px; padding: 10px; text-align: center; }
+        .panel-title { font-size: 11px; color: #aaa; margin-bottom: 5px; font-weight: bold; text-transform: uppercase; }
+        
+        #ren-container { height: 65px; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: transform 0.1s ease; }
+        #ren-count { font-size: 40px; font-weight: bold; color: #ff9900; margin: 0; line-height: 1; text-shadow: 0 0 15px rgba(255, 153, 0, 0.5); }
+        #ren-label { font-size: 12px; color: #aaa; margin: 0; font-weight: bold; }
+        .bump { transform: scale(1.3); }
 
+        .slot { border: 2px solid #555; background: #000; height: 60px; display: flex; justify-content: center; align-items: center; }
+        .sub-slots { display: grid; grid-template-rows: repeat(4, 35px); gap: 4px; margin-top: 5px; }
+        .sub-slot { height: 35px; border: 1px solid #444; background: #000; border-radius: 4px; display: flex; justify-content: center; align-items: center; }
+        
+        #score { font-size: 20px; font-weight: bold; color: #00ffcc; }
+        #shop-trigger { background: linear-gradient(135deg, #ff00ff, #ffd700); border: none; border-radius: 25px; color: #000; font-weight: bold; padding: 12px 30px; margin-bottom: 20px; cursor: pointer; box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4); transition: 0.2s; }
+        #shop-trigger:hover { transform: scale(1.05); }
+        
+        #shop-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 100; justify-content: center; align-items: center; }
+        #shop-menu { background: #222; border: 3px solid #ffd700; padding: 30px; border-radius: 15px; width: 400px; text-align: center; }
+        .shop-item { background: #333; border: 1px solid #555; border-radius: 10px; padding: 15px; margin: 10px 0; cursor: pointer; font-size: 18px; font-weight: bold; transition: 0.2s; }
+        .shop-item:hover { background: #444; border-color: #ffd700; }
+        .close-shop { margin-top: 20px; color: #aaa; cursor: pointer; }
+    </style>
+</head>
+<body oncontextmenu="return false;">
+
+    <div id="gp-status" style="position:fixed; top:10px; right:10px; font-size:12px; color:#666;">Controls: WASD / Mouse Wheel (Hold)</div>
+    <button id="shop-trigger" onclick="toggleShop()">🛒 テンプレートショップ</button>
+
+    <div id="shop-overlay">
+        <div id="shop-menu">
+            <h2 style="color:#ffd700; margin-top:0;">✨ SELECT TRAINING ✨</h2>
+            <div class="shop-item" style="color:#ffd700;" onclick="buyTSpinTemplate()">T-Spin Tower (屋根一段下げ)</div>
+            <div class="shop-item" style="color:#00d2ff;" onclick="buyRenTemplate()">4-Wide REN (4列コンボ)</div>
+            <div class="close-shop" onclick="toggleShop()">戻る</div>
+        </div>
+    </div>
+
+    <div id="game-layout">
+        <div class="side-panel">
+            <div class="panel-box"><div class="panel-title">HOLD</div><div class="slot"><canvas id="hold-canvas" width="60" height="60"></canvas></div></div>
+            <div class="panel-box"><div class="panel-title">SCORE</div><div id="score">0</div></div>
+        </div>
+        <div id="game-container"><canvas id="tetris" width="200" height="400"></canvas></div>
+        <div class="side-panel">
+            <div class="panel-box">
+                <div class="panel-title">COMBO</div>
+                <div id="ren-container">
+                    <p id="ren-count">0</p>
+                    <p id="ren-label">REN</p>
+                </div>
+            </div>
+            <div class="panel-box">
+                <div class="panel-title">NEXT</div>
+                <div class="slot"><canvas id="next-1" width="60" height="60"></canvas></div>
+                <div class="sub-slots">
+                    <div class="sub-slot"><canvas id="next-2" width="35" height="35"></canvas></div>
+                    <div class="sub-slot"><canvas id="next-3" width="35" height="35"></canvas></div>
+                    <div class="sub-slot"><canvas id="next-4" width="35" height="35"></canvas></div>
+                    <div class="sub-slot"><canvas id="next-5" width="35" height="35"></canvas></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+const canvas = document.getElementById('tetris');
+const context = canvas.getContext('2d');
+const scoreElement = document.getElementById('score');
+const renCountElement = document.getElementById('ren-count');
+const renContainer = document.getElementById('ren-container');
+const holdCanvas = document.getElementById('hold-canvas').getContext('2d');
+const nextCtxs = [1,2,3,4,5].map(i => document.getElementById(i===1?'next-1':`next-${i}`).getContext('2d'));
+
+context.scale(20, 20);
+holdCanvas.scale(15, 15);
+nextCtxs[0].scale(15, 15);
+for(let i=1; i<5; i++) nextCtxs[i].scale(8, 8);
+
+const COLORS = [null, '#FF0D72', '#0DC2FF', '#0DFF72', '#F538FF', '#FF8E0D', '#FFE138', '#3877FF', '#777'];
+const PIECE_TYPES = ['I', 'L', 'J', 'O', 'Z', 'S', 'T'];
+const SRS = { "0->1": [[0,0], [-1,0], [-1,1], [0,-2], [-1,-2]], "1->0": [[0,0], [1,0], [1,-1], [0,2], [1,2]], "1->2": [[0,0], [1,0], [1,-1], [0,2], [1,2]], "2->1": [[0,0], [-1,0], [-1,1], [0,-2], [-1,-2]], "2->3": [[0,0], [1,0], [1,1], [0,-2], [1,-2]], "3->2": [[0,0], [-1,0], [-1,-1], [0,2], [-1,2]], "3->0": [[0,0], [-1,0], [-1,-1], [0,2], [-1,2]], "0->3": [[0,0], [1,0], [1,1], [0,-2], [1,-2]] };
+
+let arena = Array.from({length: 20}, () => new Array(10).fill(0));
+let nextQueue = [], holdPiece = null, canHold = true, particles = [], lineFlashes = [];
+let tSpinAnnounce = { text: '', life: 0, isBtB: false };
+let lockTimer = 0, moveCount = 0, btbActive = false, shakeTimer = 0, renCount = -1;
+const LOCK_DELAY = 1000, MAX_MOVES = 15;
+const player = { pos: {x: 3, y: 0}, matrix: null, type: null, rotation: 0, score: 0, lastOpWasRotate: false };
+
+// --- 入力設定 (DAS/ARR) ---
+const DAS_DELAY = 160; 
+const ARR_SPEED = 30;
+let keys = {};
+let dasTimers = { 37: 0, 39: 0, 65: 0, 68: 0 };
+let lastRepeat = { 37: 0, 39: 0, 65: 0, 68: 0 };
+
+// --- キーボードイベント ---
+window.addEventListener('keydown', e => {
+    if (keys[e.keyCode]) return;
+    keys[e.keyCode] = true;
+    if (e.keyCode === 87 || e.keyCode === 32 || e.keyCode === 38) hardDrop();
+    if (e.keyCode === 69) playerRotate(1);
+    if (e.keyCode === 81) playerRotate(-1);
+    if (e.keyCode === 67 || e.keyCode === 16) playerHold();
+});
+
+window.addEventListener('keyup', e => {
+    keys[e.keyCode] = false;
+    if (dasTimers[e.keyCode] !== undefined) dasTimers[e.keyCode] = 0;
+});
+
+// --- マウスイベント ---
+canvas.addEventListener('mousedown', e => {
+    e.preventDefault();
+    if (e.button === 0) playerRotate(-1); // 左クリック：左回転
+    if (e.button === 2) playerRotate(1);  // 右クリック：右回転
+});
+
+// マウスホイールイベント：ホールド
+window.addEventListener('wheel', e => {
+    e.preventDefault(); // スクロール禁止
+    playerHold();
+}, { passive: false });
+
+function createPiece(type) {
+    if (type === 'I') return [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]];
+    if (type === 'L') return [[0,0,2],[2,2,2],[0,0,0]];
+    if (type === 'J') return [[3,0,0],[3,3,3],[0,0,0]];
+    if (type === 'O') return [[4,4],[4,4]];
+    if (type === 'Z') return [[5,5,0],[0,5,5],[0,0,0]];
+    if (type === 'S') return [[0,6,6],[6,6,0],[0,0,0]];
+    if (type === 'T') return [[0,7,0],[7,7,7],[0,0,0]];
+}
+
+function rotateMatrix(matrix, dir) {
+    for (let y = 0; y < matrix.length; ++y) {
+        for (let x = 0; x < y; ++x) { [matrix[x][y], matrix[y][x]] = [matrix[y][x], matrix[x][y]]; }
+    }
+    if (dir > 0) matrix.forEach(row => row.reverse()); else matrix.reverse();
+}
+
+function resetLock() { if (moveCount < MAX_MOVES) { lockTimer = 0; moveCount++; } }
+
+function playerRotate(dir) {
+    const startRot = player.rotation;
+    const nextRot = (startRot + (dir > 0 ? 1 : 3)) % 4;
+    const pos = {x: player.pos.x, y: player.pos.y};
+    rotateMatrix(player.matrix, dir);
+    const kicks = SRS[`${startRot}->${nextRot}`] || [[0,0]];
+    for (const kick of kicks) {
+        player.pos.x = pos.x + kick[0]; player.pos.y = pos.y - kick[1];
+        if (!collide(arena, player)) { player.rotation = nextRot; player.lastOpWasRotate = true; resetLock(); return; }
+        player.pos.x = pos.x; player.pos.y = pos.y;
+    }
+    rotateMatrix(player.matrix, -dir);
+}
+
+function playerMove(dir) {
+    player.pos.x += dir;
+    if (collide(arena, player)) { player.pos.x -= dir; return false; }
+    else { player.lastOpWasRotate = false; resetLock(); return true; }
+}
+
+function collide(arena, p) {
+    const [m, o] = [p.matrix, p.pos];
+    for (let y = 0; y < m.length; ++y) {
+        for (let x = 0; x < m[y].length; ++x) {
+            if (m[y][x] !== 0 && (arena[y + o.y] && arena[y + o.y][x + o.x]) !== 0) return true;
+        }
+    }
+    return false;
+}
+
+function playerHold() {
+    if (!canHold) return;
+    if (!holdPiece) { holdPiece = player.type; playerReset(); }
+    else { const temp = player.type; player.type = holdPiece; holdPiece = temp; player.matrix = createPiece(player.type); player.pos.y = 0; player.pos.x = 3; player.rotation = 0; }
+    canHold = false; drawSide();
+}
+
+function arenaSweep() {
+    let lines = 0;
+    let isTSpin = false;
+    if (player.type === 'T' && player.lastOpWasRotate) {
+        let corners = 0; const cx = player.pos.x + 1; const cy = player.pos.y + 1;
+        [[cx-1, cy-1], [cx+1, cy-1], [cx-1, cy+1], [cx+1, cy+1]].forEach(([x, y]) => {
+            if (x < 0 || x >= 10 || y >= 20 || (y >= 0 && arena[y][x] !== 0)) corners++;
+        });
+        if (corners >= 3) isTSpin = true;
+    }
+    for (let y = arena.length - 1; y >= 0; --y) {
+        if (arena[y].every(v => v !== 0)) {
+            lineFlashes.push({ y: y, life: 10 });
+            for(let x=0; x<10; x++) particles.push({x:x+0.5, y:y+0.5, vx:(Math.random()-0.5)*0.2, vy:(Math.random()-0.5)*0.2, life:1});
+            arena.splice(y, 1); arena.unshift(new Array(10).fill(0));
+            lines++; y++;
+        }
+    }
+    if (lines > 0) {
+        renCount++; 
+        if (renCount > 0) {
+            renCountElement.innerText = renCount;
+            renContainer.classList.add('bump');
+            setTimeout(() => renContainer.classList.remove('bump'), 100);
+            const heat = Math.min(renCount * 20, 150);
+            renCountElement.style.color = `rgb(255, ${255 - heat}, 0)`;
+        }
+        const isPowerMove = isTSpin || lines === 4;
+        let b = [0, 100, 300, 500, 800][lines];
+        if (renCount > 0) { b += renCount * 50; }
+        if (isPowerMove) {
+            let bonusText = ""; if (btbActive) { b *= 1.5; bonusText = "🔥 BtB "; }
+            if (isTSpin) { 
+                const names = ["", "SINGLE", "DOUBLE", "TRIPLE"]; 
+                tSpinAnnounce = { text: `${bonusText}T-SPIN ${names[lines]}!`, life: 100, isBtB: btbActive }; 
+                b *= 2; 
+            }
+            else if (lines === 4) { tSpinAnnounce = { text: `${bonusText}TETRIS!`, life: 100, isBtB: btbActive }; }
+            btbActive = true; shakeTimer = 10;
+        } else { btbActive = false; }
+        player.score += Math.floor(b); scoreElement.innerText = player.score;
+    } else { 
+        renCount = -1; 
+        renCountElement.innerText = "0"; 
+        renCountElement.style.color = "#ff9900";
+    }
+}
+
+function playerReset() {
+    while (nextQueue.length < 14) nextQueue = nextQueue.concat([...PIECE_TYPES].sort(() => Math.random() - 0.5));
+    player.type = nextQueue.shift(); player.matrix = createPiece(player.type);
+    player.pos.y = 0; player.pos.x = 3; player.rotation = 0; player.lastOpWasRotate = false;
+    lockTimer = 0; moveCount = 0; canHold = true;
+    if (collide(arena, player)) { arena.forEach(row => row.fill(0)); player.score = 0; scoreElement.innerText = 0; btbActive = false; renCount = -1; renCountElement.innerText = "0"; }
+    drawSide();
+}
+
+function lockPiece() {
+    player.matrix.forEach((row, y) => { row.forEach((v, x) => { if (v !== 0) arena[y + player.pos.y][x + player.pos.x] = v; }); });
+    arenaSweep(); playerReset();
+}
+
+function playerDrop() {
+    player.pos.y++;
+    if (collide(arena, player)) { player.pos.y--; } else { player.lastOpWasRotate = false; lockTimer = 0; }
+    dropCounter = 0;
+}
+
+function hardDrop() {
+    while(!collide(arena, {pos:{x:player.pos.x, y:player.pos.y+1}, matrix:player.matrix})) player.pos.y++;
+    lockPiece();
+}
+
+function getGhostPos() {
+    let ghost = { pos: {x: player.pos.x, y: player.pos.y}, matrix: player.matrix };
+    while (!collide(arena, { pos: {x: ghost.pos.x, y: ghost.pos.y + 1}, matrix: ghost.matrix })) { ghost.pos.y++; }
+    return ghost.pos;
+}
+
+function drawMatrix(m, o, ctx, isGhost = false) {
+    m.forEach((r, y) => { r.forEach((v, x) => {
+        if (v !== 0) {
+            ctx.fillStyle = isGhost ? 'rgba(255,255,255,0.2)' : COLORS[v];
+            ctx.fillRect(x + o.x, y + o.y, 1, 1);
+            ctx.lineWidth = 0.05; ctx.strokeStyle = isGhost ? 'rgba(255,255,255,0.5)' : "white";
+            ctx.strokeRect(x+o.x, y+o.y, 1, 1);
+        }
+    }); });
+}
+
+function drawSide() {
+    holdCanvas.clearRect(0,0,60,60); if(holdPiece) drawMatrix(createPiece(holdPiece), {x:0.5, y:0.5}, holdCanvas);
+    nextCtxs.forEach((ctx, i) => { ctx.clearRect(0,0,60,60); if(nextQueue[i]) drawMatrix(createPiece(nextQueue[i]), {x:0.5, y:0.5}, ctx); });
+}
+
+function draw() {
+    if (shakeTimer > 0) {
+        const sx = (Math.random() - 0.5) * 0.5; const sy = (Math.random() - 0.5) * 0.5;
+        canvas.style.transform = `translate(${sx}rem, ${sy}rem)`; shakeTimer--;
+    } else { canvas.style.transform = `translate(0, 0)`; }
+    context.fillStyle = '#000'; context.fillRect(0, 0, canvas.width, canvas.height);
+    drawMatrix(arena, {x:0, y:0}, context);
+    drawMatrix(player.matrix, getGhostPos(), context, true);
+    drawMatrix(player.matrix, player.pos, context);
+    lineFlashes = lineFlashes.filter(f => { context.fillStyle=`rgba(255,255,255,${f.life/10})`; context.fillRect(0, f.y, 10, 1); f.life--; return f.life > 0; });
+    particles = particles.filter(p => { p.x+=p.vx; p.y+=p.vy; p.life-=0.02; context.fillStyle=`rgba(255,255,255,${p.life})`; context.fillRect(p.x, p.y, 0.1, 0.1); return p.life>0; });
+    if(tSpinAnnounce.life > 0) { 
+        context.save(); context.fillStyle= tSpinAnnounce.isBtB ? `rgba(255, 215, 0, ${tSpinAnnounce.life/100})` : `rgba(0, 255, 204, ${tSpinAnnounce.life/100})`; 
+        context.font="bold 1.2px Arial"; context.textAlign="center"; context.fillText(tSpinAnnounce.text, 5, 8); context.restore(); tSpinAnnounce.life -= 1.5; 
+    }
+}
+
+function handleInput(now) {
+    const directions = [
+        { key: 37, dir: -1 }, { key: 65, dir: -1 },
+        { key: 39, dir: 1 },  { key: 68, dir: 1 }
+    ];
+    directions.forEach(({key, dir}) => {
+        if (keys[key]) {
+            if (dasTimers[key] === 0) {
+                playerMove(dir);
+                dasTimers[key] = now;
+                lastRepeat[key] = now;
+            } else if (now - dasTimers[key] > DAS_DELAY) {
+                if (now - lastRepeat[key] > ARR_SPEED) {
+                    playerMove(dir);
+                    lastRepeat[key] = now;
+                }
+            }
+        }
+    });
+}
+
+function toggleShop() { const s = document.getElementById('shop-overlay'); s.style.display = s.style.display === 'flex' ? 'none' : 'flex'; }
+
+function buyTSpinTemplate() { 
+    arena.forEach(r => r.fill(0)); 
+    const pattern = ["1110111111", "1100111111", "1110111111", "1000111111", "1001111111", "1001111111", "1011111111", "1000111111", "1100111111", "1100111111", "1110111111", "1000111111", "1001111111", "1001111111", "1011111111", "1000000000", "1100000000", "0000000000", "0000000000", "0000000000"].reverse();
+    for(let y = 0; y < 20; y++) { for(let x = 0; x < 10; x++) if (pattern[y] && pattern[y][x] === "1") arena[y][x] = 8; }
+    nextQueue = Array(7).fill('T').concat(nextQueue);
+    playerReset(); toggleShop(); 
+}
+
+function buyRenTemplate() { 
+    arena.forEach(r => r.fill(0)); 
+    for(let y = 0; y < 20; y++) { for(let x = 0; x < 10; x++) { if (y === 19) { if (x !== 6) arena[y][x] = 8; } else { if (x < 3 || x > 6) arena[y][x] = 8; } } }
+    playerReset(); toggleShop(); 
+}
+
+let dropCounter = 0, lastTime = 0;
+function update(time = 0) {
+    const dt = time - lastTime; lastTime = time; dropCounter += dt;
+    handleInput(time);
+    if (collide(arena, {pos:{x:player.pos.x, y:player.pos.y+1}, matrix:player.matrix})) { 
+        lockTimer += dt; if(lockTimer >= LOCK_DELAY) lockPiece(); 
+    } else { 
+        let threshold = (keys[40] || keys[83]) ? 50 : 1000;
+        if (dropCounter > threshold) playerDrop(); 
+    }
+    draw(); requestAnimationFrame(update);
+}
+playerReset(); update();
+</script>
+</body>
+</html>
