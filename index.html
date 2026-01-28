@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Tetris Ultimate - Pro Input Edition</title>
+    <title>Tetris Ultimate - Spark Edition</title>
     <style>
         body { background: #1a1a1a; color: #fff; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; overflow: hidden; user-select: none; }
         #game-layout { display: flex; gap: 20px; align-items: flex-start; }
@@ -99,14 +99,12 @@ let lockTimer = 0, moveCount = 0, btbActive = false, shakeTimer = 0, renCount = 
 const LOCK_DELAY = 1000, MAX_MOVES = 15;
 const player = { pos: {x: 3, y: 0}, matrix: null, type: null, rotation: 0, score: 0, lastOpWasRotate: false };
 
-// --- 入力設定 (DAS/ARR) ---
 const DAS_DELAY = 160; 
 const ARR_SPEED = 30;
 let keys = {};
 let dasTimers = { 37: 0, 39: 0, 65: 0, 68: 0 };
 let lastRepeat = { 37: 0, 39: 0, 65: 0, 68: 0 };
 
-// --- キーボードイベント ---
 window.addEventListener('keydown', e => {
     if (keys[e.keyCode]) return;
     keys[e.keyCode] = true;
@@ -121,16 +119,14 @@ window.addEventListener('keyup', e => {
     if (dasTimers[e.keyCode] !== undefined) dasTimers[e.keyCode] = 0;
 });
 
-// --- マウスイベント ---
 canvas.addEventListener('mousedown', e => {
     e.preventDefault();
-    if (e.button === 0) playerRotate(-1); // 左クリック：左回転
-    if (e.button === 2) playerRotate(1);  // 右クリック：右回転
+    if (e.button === 0) playerRotate(-1);
+    if (e.button === 2) playerRotate(1);
 });
 
-// マウスホイールイベント：ホールド
 window.addEventListener('wheel', e => {
-    e.preventDefault(); // スクロール禁止
+    e.preventDefault();
     playerHold();
 }, { passive: false });
 
@@ -203,7 +199,7 @@ function arenaSweep() {
     for (let y = arena.length - 1; y >= 0; --y) {
         if (arena[y].every(v => v !== 0)) {
             lineFlashes.push({ y: y, life: 10 });
-            for(let x=0; x<10; x++) particles.push({x:x+0.5, y:y+0.5, vx:(Math.random()-0.5)*0.2, vy:(Math.random()-0.5)*0.2, life:1});
+            for(let x=0; x<10; x++) spawnSpark(x + 0.5, y + 0.5, 5); // 行消去時もキラキラ
             arena.splice(y, 1); arena.unshift(new Array(10).fill(0));
             lines++; y++;
         }
@@ -258,8 +254,32 @@ function playerDrop() {
     dropCounter = 0;
 }
 
+// --- エフェクト関数: キラキラを生成 ---
+function spawnSpark(x, y, count = 10) {
+    for(let i=0; i<count; i++) {
+        particles.push({
+            x: x, 
+            y: y, 
+            vx: (Math.random() - 0.5) * 0.4, 
+            vy: (Math.random() - 0.5) * 0.4, 
+            life: 1.0,
+            size: Math.random() * 0.15 + 0.05
+        });
+    }
+}
+
 function hardDrop() {
     while(!collide(arena, {pos:{x:player.pos.x, y:player.pos.y+1}, matrix:player.matrix})) player.pos.y++;
+    
+    // 着地点周辺にキラキラを発生させる！ ✨✨
+    player.matrix.forEach((row, y) => {
+        row.forEach((v, x) => {
+            if (v !== 0) {
+                spawnSpark(player.pos.x + x + 0.5, player.pos.y + y + 0.5, 5);
+            }
+        });
+    });
+    shakeTimer = 5; // 画面を少し揺らす
     lockPiece();
 }
 
@@ -294,8 +314,20 @@ function draw() {
     drawMatrix(arena, {x:0, y:0}, context);
     drawMatrix(player.matrix, getGhostPos(), context, true);
     drawMatrix(player.matrix, player.pos, context);
+
+    // ライン消去フラッシュ
     lineFlashes = lineFlashes.filter(f => { context.fillStyle=`rgba(255,255,255,${f.life/10})`; context.fillRect(0, f.y, 10, 1); f.life--; return f.life > 0; });
-    particles = particles.filter(p => { p.x+=p.vx; p.y+=p.vy; p.life-=0.02; context.fillStyle=`rgba(255,255,255,${p.life})`; context.fillRect(p.x, p.y, 0.1, 0.1); return p.life>0; });
+    
+    // パーティクル（キラキラ）の描画 ✨✨
+    particles = particles.filter(p => { 
+        p.x += p.vx; p.y += p.vy; p.life -= 0.03; 
+        context.fillStyle = `rgba(255,255,255,${p.life})`; 
+        context.beginPath();
+        context.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        context.fill();
+        return p.life > 0; 
+    });
+
     if(tSpinAnnounce.life > 0) { 
         context.save(); context.fillStyle= tSpinAnnounce.isBtB ? `rgba(255, 215, 0, ${tSpinAnnounce.life/100})` : `rgba(0, 255, 204, ${tSpinAnnounce.life/100})`; 
         context.font="bold 1.2px Arial"; context.textAlign="center"; context.fillText(tSpinAnnounce.text, 5, 8); context.restore(); tSpinAnnounce.life -= 1.5; 
@@ -303,52 +335,25 @@ function draw() {
 }
 
 function handleInput(now) {
-    const directions = [
-        { key: 37, dir: -1 }, { key: 65, dir: -1 },
-        { key: 39, dir: 1 },  { key: 68, dir: 1 }
-    ];
+    const directions = [{ key: 37, dir: -1 }, { key: 65, dir: -1 }, { key: 39, dir: 1 }, { key: 68, dir: 1 }];
     directions.forEach(({key, dir}) => {
         if (keys[key]) {
-            if (dasTimers[key] === 0) {
-                playerMove(dir);
-                dasTimers[key] = now;
-                lastRepeat[key] = now;
-            } else if (now - dasTimers[key] > DAS_DELAY) {
-                if (now - lastRepeat[key] > ARR_SPEED) {
-                    playerMove(dir);
-                    lastRepeat[key] = now;
-                }
-            }
+            if (dasTimers[key] === 0) { playerMove(dir); dasTimers[key] = now; lastRepeat[key] = now; }
+            else if (now - dasTimers[key] > DAS_DELAY) { if (now - lastRepeat[key] > ARR_SPEED) { playerMove(dir); lastRepeat[key] = now; } }
         }
     });
 }
 
 function toggleShop() { const s = document.getElementById('shop-overlay'); s.style.display = s.style.display === 'flex' ? 'none' : 'flex'; }
-
-function buyTSpinTemplate() { 
-    arena.forEach(r => r.fill(0)); 
-    const pattern = ["1110111111", "1100111111", "1110111111", "1000111111", "1001111111", "1001111111", "1011111111", "1000111111", "1100111111", "1100111111", "1110111111", "1000111111", "1001111111", "1001111111", "1011111111", "1000000000", "1100000000", "0000000000", "0000000000", "0000000000"].reverse();
-    for(let y = 0; y < 20; y++) { for(let x = 0; x < 10; x++) if (pattern[y] && pattern[y][x] === "1") arena[y][x] = 8; }
-    nextQueue = Array(7).fill('T').concat(nextQueue);
-    playerReset(); toggleShop(); 
-}
-
-function buyRenTemplate() { 
-    arena.forEach(r => r.fill(0)); 
-    for(let y = 0; y < 20; y++) { for(let x = 0; x < 10; x++) { if (y === 19) { if (x !== 6) arena[y][x] = 8; } else { if (x < 3 || x > 6) arena[y][x] = 8; } } }
-    playerReset(); toggleShop(); 
-}
+function buyTSpinTemplate() { arena.forEach(r => r.fill(0)); const pattern = ["1110111111", "1100111111", "1110111111", "1000111111", "1001111111", "1001111111", "1011111111", "1000111111", "1100111111", "1100111111", "1110111111", "1000111111", "1001111111", "1001111111", "1011111111", "1000000000", "1100000000", "0000000000", "0000000000", "0000000000"].reverse(); for(let y = 0; y < 20; y++) { for(let x = 0; x < 10; x++) if (pattern[y] && pattern[y][x] === "1") arena[y][x] = 8; } nextQueue = Array(7).fill('T').concat(nextQueue); playerReset(); toggleShop(); }
+function buyRenTemplate() { arena.forEach(r => r.fill(0)); for(let y = 0; y < 20; y++) { for(let x = 0; x < 10; x++) { if (y === 19) { if (x !== 6) arena[y][x] = 8; } else { if (x < 3 || x > 6) arena[y][x] = 8; } } } playerReset(); toggleShop(); }
 
 let dropCounter = 0, lastTime = 0;
 function update(time = 0) {
     const dt = time - lastTime; lastTime = time; dropCounter += dt;
     handleInput(time);
-    if (collide(arena, {pos:{x:player.pos.x, y:player.pos.y+1}, matrix:player.matrix})) { 
-        lockTimer += dt; if(lockTimer >= LOCK_DELAY) lockPiece(); 
-    } else { 
-        let threshold = (keys[40] || keys[83]) ? 50 : 1000;
-        if (dropCounter > threshold) playerDrop(); 
-    }
+    if (collide(arena, {pos:{x:player.pos.x, y:player.pos.y+1}, matrix:player.matrix})) { lockTimer += dt; if(lockTimer >= LOCK_DELAY) lockPiece(); }
+    else { let threshold = (keys[40] || keys[83]) ? 50 : 1000; if (dropCounter > threshold) playerDrop(); }
     draw(); requestAnimationFrame(update);
 }
 playerReset(); update();
