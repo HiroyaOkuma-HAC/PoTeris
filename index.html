@@ -34,7 +34,7 @@
         }
 
         #game-container { position: relative; border: 4px solid #333; border-radius: 5px; box-shadow: 0 0 40px rgba(0, 210, 255, 0.2); }
-        canvas#tetris { display: block; background-color: rgba(0, 0, 0, 0.8); cursor: crosshair; }
+        canvas#tetris { display: block; background-color: rgba(0, 0, 0, 0.3); cursor: crosshair; }
         
         .side-panel { display: flex; flex-direction: column; gap: 10px; width: 120px; }
         .stats-panel { width: 150px; } 
@@ -210,8 +210,19 @@ holdCanvas.scale(15, 15);
 nextCtxs[0].scale(15, 15);
 for(let i=1; i<5; i++) nextCtxs[i].scale(8, 8);
 
-const COLORS = [null, '#FF0D72', '#0DC2FF', '#0DFF72', '#F538FF', '#FF8E0D', '#FFE138', '#3877FF', '#444'];
-const PIECE_TYPES = ['I', 'L', 'J', 'O', 'Z', 'S', 'T'];
+// ミノの種類（PIECE_TYPES）の並び順に合わせて色を設定しました！
+// 1:T(紫), 2:L(青), 3:J(橙), 4:O(黄), 5:Z(赤), 6:S(緑), 7:I(水色)
+const COLORS = [
+    null, 
+    '#00FFFF', // T: 紫 (Purple)
+    '#0055FF', // L: 青 (Blue)
+    '#FF8C00', // J: オレンジ (Orange)
+    '#FFD700', // O: 黄色 (Yellow)
+    '#FF2D2D', // Z: 赤 (Red)
+    '#00FF44', // S: 緑 (Green)
+    '#00D2FF', // I: 水色 (Cyan)
+    '#444'     // 8: 壁など（予備）
+];const PIECE_TYPES = ['I', 'L', 'J', 'O', 'Z', 'S', 'T'];
 
 const SRS_DATA = {
     "0->1": [[0,0], [-1,0], [-1,1], [0,-2], [-1,-2]], "1->0": [[0,0], [1,0], [1,-1], [0,2], [1,2]],
@@ -225,6 +236,22 @@ let nextQueue = [], holdPiece = null, canHold = true, particles = [], lineFlashe
 let tSpinAnnounce = { text: '', life: 0, isBtB: false, isPerfect: false };
 let fieldFlash = 0; 
 let lockTimer = 0, moveCount = 0, btbActive = false, shakeTimer = 0, renCount = -1, isPaused = false;
+// --- 背景のキラキラ設定 ---
+let bgStars = [];
+function createBackgroundStars() {
+    bgStars = []; // 初期化
+    for (let i = 0; i < 50; i++) {
+        bgStars.push({
+            x: Math.random() * 10, // 横幅(0~10)
+            y: Math.random() * 20, // 縦幅(0~20)
+            size: Math.random() * 0.05 + 0.02,
+            speed: Math.random() * 0.01 + 0.005,
+            opacity: Math.random()
+        });
+    }
+}
+createBackgroundStars();
+
 const LOCK_DELAY = 1000, MAX_MOVES = 15;
 const player = { pos: {x: 3, y: 0}, matrix: null, type: null, rotation: 0, score: 0, lastOpWasRotate: false };
 
@@ -323,12 +350,25 @@ function playerHold() {
     canHold = false; drawSide();
 }
 function spawnSpark(x, y, count = 10, color = '255, 255, 255') {
-    for(let i=0; i<count; i++) particles.push({ x: x, y: y, vx: (Math.random() - 0.5) * 0.5, vy: (Math.random() - 0.5) * 0.5, life: 1.0, size: Math.random() * 0.18 + 0.05, color: color });
+    for(let i=0; i<count; i++) {
+        particles.push({
+            x: x,
+            y: y,
+            vx: (Math.random() - 0.5) * 0.8, // 飛び散る速さUP
+            vy: (Math.random() - 0.5) * 0.8,
+            life: 1.0,
+            size: Math.random() * 0.25 + 0.05,
+            color: color,
+            gravity: 0.02 // 下に落ちる重力！
+        });
+    }
 }
 function hexToRgb(hex) { if (!hex) return "255,255,255"; const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16); return `${r}, ${g}, ${b}`; }
 
 function arenaSweep() {
     let lines = 0, isTSpin = false;
+    
+    // T-Spin 判定 (ここは今のロジックを維持)
     if (player.type === 'T' && player.lastOpWasRotate) {
         let corners = 0; const cx = player.pos.x + 1; const cy = player.pos.y + 1;
         [[cx-1, cy-1], [cx+1, cy-1], [cx-1, cy+1], [cx+1, cy+1]].forEach(([x, y]) => { 
@@ -336,64 +376,85 @@ function arenaSweep() {
         });
         if (corners >= 3) isTSpin = true;
     }
+
+    // ライン消去処理
     for (let y = arena.length - 1; y >= 0; --y) {
         if (arena[y].every(v => v !== 0)) {
-            lineFlashes.push({ y: y, life: 10 }); gridWaves.push({ y: y, radius: 0, life: 30 });
-            for(let x=0; x<10; x++) { const rgb = hexToRgb(COLORS[arena[y][x]]); spawnSpark(x + 0.5, y + 0.5, 8, rgb); }
-            arena.splice(y, 1); arena.unshift(new Array(10).fill(0));
+            lineFlashes.push({ y: y, life: 15 });
+            gridWaves.push({ y: y, radius: 0, life: 40 });
+            for(let x=0; x<10; x++) { 
+                const rgb = hexToRgb(COLORS[arena[y][x]]); 
+                spawnSpark(x + 0.5, y + 0.5, 12, rgb); 
+            }
+            arena.splice(y, 1); 
+            arena.unshift(new Array(10).fill(0));
             lines++; y++;
         }
     }
+
     if (lines > 0) {
         renCount++; 
         stats.totalLines += lines;
         if (renCount > stats.maxRen) stats.maxRen = renCount;
 
-        if (renCount > 0) { 
-            renCountElement.innerText = renCount; 
-            renContainer.classList.add('bump'); 
-            setTimeout(() => renContainer.classList.remove('bump'), 100); 
-            const heat = Math.min(renCount * 20, 150); 
-            renCountElement.style.color = `rgb(255, ${255 - heat}, 0)`; 
-        }
-        
+        // REN（コンボ）の演出
+        renCountElement.innerText = renCount; 
+        renContainer.style.transform = `scale(${1 + renCount * 0.15}) rotate(${Math.random() * 10 - 5}deg)`;
+        renContainer.classList.add('bump'); 
+        setTimeout(() => renContainer.classList.remove('bump'), 100); 
+        const heat = Math.min(renCount * 25, 200); 
+        renCountElement.style.color = `rgb(255, ${255 - heat}, 0)`; 
+
+        // ★ここから：演出テキストの復活とスコア計算
         const isPowerMove = isTSpin || lines === 4;
-        let b = [0, 100, 300, 500, 800][lines];
-        if (renCount > 0) b += renCount * 50;
+        let b = [0, 100, 300, 500, 800][lines]; // 基本スコア
+        if (renCount > 0) b += renCount * 50;  // RENボーナス
         
         let isPerfectClear = arena.every(row => row.every(v => v === 0));
 
         if (isPowerMove) {
             let bonusText = ""; 
             if (btbActive) { b *= 1.5; bonusText = "🔥 BtB "; stats.btb++; }
+            
             if (isTSpin) { 
                 const names = ["", "SINGLE", "DOUBLE", "TRIPLE"]; 
                 tSpinAnnounce = { text: `${bonusText}T-SPIN ${names[lines]}!`, life: 100, isBtB: btbActive, isPerfect: false }; 
                 b *= 2; 
                 if(lines === 1) stats.ts++; else if(lines === 2) stats.td++; else if(lines === 3) stats.tt++;
-            }
-            else if (lines === 4) { 
+            } else if (lines === 4) { 
                 tSpinAnnounce = { text: `${bonusText}TETRIS!`, life: 100, isBtB: btbActive, isPerfect: false }; 
                 stats.tetris++;
             }
-            btbActive = true; if (document.getElementById('shake-line').checked) shakeTimer = 15;
-        } else { btbActive = false; if (document.getElementById('shake-line').checked) shakeTimer = 5; }
+            btbActive = true; 
+        } else { 
+            btbActive = false; 
+        }
+
+        // 揺れの設定（RENが高いほど激しく！）
+        if (document.getElementById('shake-line').checked) {
+            shakeTimer = (isPowerMove ? 20 : 10) + (renCount * 4);
+        }
 
         if (isPerfectClear) {
             b += 3000;
             tSpinAnnounce = { text: "PERFECT CLEAR!!", life: 150, isBtB: false, isPerfect: true, bonus: "+3000" };
-            shakeTimer = 30;
-            fieldFlash = 40; 
-            for(let i=0; i<80; i++) spawnSpark(Math.random()*10, Math.random()*20, 1, "255, 215, 0"); 
+            shakeTimer = 50;
+            fieldFlash = 60; 
+            for(let i=0; i<100; i++) spawnSpark(Math.random()*10, Math.random()*20, 1, "255, 215, 0"); 
         }
 
         player.score += Math.floor(b); 
         if (player.score > stats.highScore) stats.highScore = player.score;
         scoreElement.innerText = player.score;
         updateStatsUI();
-    } else { renCount = -1; renCountElement.innerText = "0"; renCountElement.style.color = "#ff9900"; }
+        // ★ここまで
+        
+    } else {
+        renCount = -1;
+        renCountElement.innerText = "0"; 
+        renContainer.style.transform = "scale(1) rotate(0deg)";
+    }
 }
-
 function playerReset() {
     while (nextQueue.length < 14) nextQueue = nextQueue.concat([...PIECE_TYPES].sort(() => Math.random() - 0.5));
     player.type = nextQueue.shift(); player.matrix = createPiece(player.type);
@@ -410,6 +471,25 @@ function drawMatrix(m, o, ctx, isGhost = false) { m.forEach((r, y) => { r.forEac
 function drawSide() { holdCanvas.clearRect(0,0,60,60); if(holdPiece) drawMatrix(createPiece(holdPiece), {x:0.5, y:0.5}, holdCanvas); nextCtxs.forEach((ctx, i) => { ctx.clearRect(0,0,60,60); if(nextQueue[i]) drawMatrix(createPiece(nextQueue[i]), {x:0.5, y:0.5}, ctx); }); }
 
 function draw() {
+    if (shakeTimer > 0) { /* ...揺れの処理... */ }
+    context.clearRect(0, 0, canvas.width, canvas.height);
+
+    // ★ここから追加：背景のキラキラ描画
+    bgStars.forEach(star => {
+        // ふわふわと点滅させる計算
+        const twinkle = Math.abs(Math.sin(star.opacity)) * 0.5;
+        context.fillStyle = `rgba(255, 255, 255, ${twinkle})`; 
+        context.beginPath();
+        // 小さな円（星）を描画
+        context.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+        context.fill();
+
+        // 星をゆっくり動かす
+        star.y += star.speed;
+        star.opacity += 0.02; 
+        if (star.y > 20) star.y = 0; // 下まで行ったら上に戻る
+    });
+    // ★ここまで
     if (shakeTimer > 0) { const sx = (Math.random() - 0.5) * 0.5; const sy = (Math.random() - 0.5) * 0.5; canvas.style.transform = `translate(${sx}rem, ${sy}rem)`; shakeTimer--; } else { canvas.style.transform = `translate(0, 0)`; }
     context.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -426,7 +506,18 @@ function draw() {
     dropBeams = dropBeams.filter(b => { const alpha = b.life / 15; const grad = context.createLinearGradient(0, 0, 0, b.y + 1); grad.addColorStop(0, `rgba(${b.color}, 0)`); grad.addColorStop(1, `rgba(${b.color}, ${alpha * 0.5})`); context.fillStyle = grad; context.fillRect(b.x, 0, 1, b.y + 1); context.fillStyle = `rgba(255, 255, 255, ${alpha})`; context.fillRect(b.x + 0.4, 0, 0.2, b.y + 1); b.life--; return b.life > 0; });
     drawMatrix(arena, {x:0, y:0}, context); drawMatrix(player.matrix, getGhostPos(), context, true); drawMatrix(player.matrix, player.pos, context);
     lineFlashes = lineFlashes.filter(f => { context.fillStyle=`rgba(255,255,255,${f.life/10})`; context.fillRect(0, f.y, 10, 1); f.life--; return f.life > 0; });
-    particles = particles.filter(p => { p.x += p.vx; p.y += p.vy; p.life -= 0.025; context.fillStyle = `rgba(${p.color}, ${p.life})`; context.beginPath(); context.arc(p.x, p.y, p.size, 0, Math.PI * 2); context.fill(); return p.life > 0; });
+   // draw関数の中にある particles = particles.filter(...) の部分をこれに！
+particles = particles.filter(p => { 
+    p.x += p.vx; 
+    p.y += p.vy; 
+    p.vy += p.gravity; // 重力で下に加速！
+    p.life -= 0.02;    // 消えるスピード
+    context.fillStyle = `rgba(${p.color}, ${p.life})`; 
+    context.beginPath(); 
+    context.arc(p.x, p.y, p.size, 0, Math.PI * 2); 
+    context.fill(); 
+    return p.life > 0; 
+});
     
     if(tSpinAnnounce.life > 0) { 
         context.save(); 
@@ -524,24 +615,44 @@ function handleInput(now) {
     if (isPaused) return;
     updateGamepad(); 
     
-    const moveSettings = [{ keys: [37, 65], dir: -1 }, { keys: [39, 68], dir: 1 }];
-    moveSettings.forEach(({keys: kList, dir}) => { 
-        const isAnyDown = kList.some(k => keys[k]);
-        const primaryKey = kList[0]; 
+    const moveSettings = [
+        { key: 37, alt: 65, dir: -1 }, // 左 (Left, A)
+        { key: 39, alt: 68, dir: 1 }   // 右 (Right, D)
+    ];
 
-        if (isAnyDown) { 
-            if (dasTimers[primaryKey] === 0) { 
+    // 両方のキー（または代用キー）が押されているかチェック
+    const leftDown = keys[37] || keys[65];
+    const rightDown = keys[39] || keys[68];
+
+    moveSettings.forEach(({key, alt, dir}) => { 
+        const isThisDown = keys[key] || keys[alt];
+        const isOtherDown = (dir === -1) ? rightDown : leftDown;
+
+        if (isThisDown) {
+            // 【重要】両方押されている場合、後から押した方を優先するために
+            // DASタイマーが新しい（大きい）方を優先、または単純に排他制御する
+            if (isOtherDown) {
+                // 両押し時は、後から押されたキー（タイマーが新しい方）のみ処理
+                const otherKey = (dir === -1) ? (keys[39] ? 39 : 68) : (keys[37] ? 37 : 65);
+                if (dasTimers[key] < dasTimers[otherKey]) return; 
+            }
+
+            if (dasTimers[key] === 0) { 
                 playerMove(dir); 
-                dasTimers[primaryKey] = now; 
-                lastRepeat[primaryKey] = now; 
+                dasTimers[key] = now; 
+                lastRepeat[key] = now; 
             } 
-            else if (now - dasTimers[primaryKey] > DAS_DELAY) { 
-                if (now - lastRepeat[primaryKey] > ARR_SPEED) { 
+            else if (now - dasTimers[key] > DAS_DELAY) { 
+                if (now - lastRepeat[key] > ARR_SPEED) { 
                     playerMove(dir); 
-                    lastRepeat[primaryKey] = now; 
+                    lastRepeat[key] = now; 
                 } 
             } 
-        } 
+        } else {
+            // キーが離されたらタイマーをリセット
+            dasTimers[key] = 0;
+            lastRepeat[key] = 0;
+        }
     }); 
 }
 
