@@ -128,6 +128,18 @@
                     <span class="slider"></span>
                 </label>
             </div>
+<div class="menu-item" onclick="toggleSE()">
+    <span>SE SOUND</span>
+    <label class="switch">
+        <input type="checkbox" id="se-toggle" checked>
+        <span class="slider"></span>
+    </label>
+</div>
+<div class="menu-item">
+    <span>Select BGM (MP3/WAV/OGG)</span>
+    <input type="file" id="bgm-upload" accept=".mp3, .wav, .ogg, audio/mp3, audio/wav, audio/ogg" style="display:none" onchange="loadLocalBGM(this)">
+    <button onclick="document.getElementById('bgm-upload').click()" style="background:#444; color:#fff; border:none; border-radius:5px; cursor:pointer;">📁 Open</button>
+</div>
             <div class="close-btn" onclick="toggleOptions()">[ CLOSE & RESUME ]</div>
         </div>
     </div>
@@ -231,6 +243,18 @@ const SRS_DATA = {
     "3->0": [[0,0], [-1,0], [-1,-1], [0,2], [-1,2]], "0->3": [[0,0], [1,0], [1,1], [0,-2], [1,-2]]
 };
 
+// BGMの準備
+const bgm = new Audio();
+bgm.loop = true; // 終わったら最初から流す
+bgm.volume = 0.4; // 爆音にならないように少し下げる
+let isBgmPlaying = false;
+
+// 曲のリスト（あなたの持っているファイル名に合わせてね！）
+const BGM_LIST = {
+    standard: 'https://example.com/normal_bgm.mp3', // 通常時
+    fever: 'https://example.com/fast_bgm.mp3'       // 盛り上がってきた時用
+};
+
 let arena = Array.from({length: 20}, () => new Array(10).fill(0));
 let nextQueue = [], holdPiece = null, canHold = true, particles = [], lineFlashes = [], dropBeams = [], gridWaves = [];
 let tSpinAnnounce = { text: '', life: 0, isBtB: false, isPerfect: false };
@@ -318,15 +342,43 @@ function playerRotate(dir) {
     const nextRot = (startRot + (dir > 0 ? 1 : 3)) % 4;
     const pos = {x: player.pos.x, y: player.pos.y};
     rotateMatrix(player.matrix, dir);
+    
     const kicks = SRS_DATA[`${startRot}->${nextRot}`] || [[0,0]];
     for (const kick of kicks) {
         player.pos.x = pos.x + kick[0]; player.pos.y = pos.y - kick[1];
-        if (!collide(arena, player)) { player.rotation = nextRot; player.lastOpWasRotate = true; resetLock(); return; }
+        if (!collide(arena, player)) { 
+            player.rotation = nextRot; 
+            player.lastOpWasRotate = true; 
+            resetLock(); 
+
+            // --- ✨ ここから追加：T-Spinスロットにはまった音の判定 ---
+            if (player.type === 'T') {
+                let corners = 0; 
+                const cx = player.pos.x + 1; 
+                const cy = player.pos.y + 1;
+                [[cx-1, cy-1], [cx+1, cy-1], [cx-1, cy+1], [cx+1, cy+1]].forEach(([x, y]) => { 
+                    if (x < 0 || x >= 10 || y >= 20 || (y >= 0 && arena[y][x] !== 0)) corners++; 
+                });
+                
+                if (corners >= 3) {
+                    SE.tSpinSet(); // 「ガキン！」と鳴らす
+                    // 演出：ちょっとだけ画面を光らせるのもアリ！
+                    fieldFlash = 10; 
+                } else {
+                    SE.rotate(); // 普通の回転音
+                }
+            } else {
+                SE.rotate(); // Tミノ以外は普通の回転音
+            }
+            // --- ✨ ここまで ---
+            
+            return; 
+        }
         player.pos.x = pos.x; player.pos.y = pos.y;
     }
     rotateMatrix(player.matrix, -dir);
-}
-function playerMove(dir) {
+}function playerMove(dir) {
+SE.move();
     player.pos.x += dir;
     if (collide(arena, player)) { player.pos.x -= dir; return false; }
     else { player.lastOpWasRotate = false; resetLock(); return true; }
@@ -345,6 +397,7 @@ function collide(arena, p) {
 }
 function playerHold() {
     if (!canHold) return;
+SE.hold();
     if (!holdPiece) { holdPiece = player.type; playerReset(); }
     else { const temp = player.type; player.type = holdPiece; holdPiece = temp; player.matrix = createPiece(player.type); player.pos.y = 0; player.pos.x = 3; player.rotation = 0; }
     canHold = false; drawSide();
@@ -368,16 +421,19 @@ function hexToRgb(hex) { if (!hex) return "255,255,255"; const r = parseInt(hex.
 function arenaSweep() {
     let lines = 0, isTSpin = false;
     
-    // T-Spin 判定 (ここは今のロジックを維持)
+    // --- T-Spin 判定 ---
     if (player.type === 'T' && player.lastOpWasRotate) {
         let corners = 0; const cx = player.pos.x + 1; const cy = player.pos.y + 1;
         [[cx-1, cy-1], [cx+1, cy-1], [cx-1, cy+1], [cx+1, cy+1]].forEach(([x, y]) => { 
             if (x < 0 || x >= 10 || y >= 20 || (y >= 0 && arena[y][x] !== 0)) corners++; 
         });
-        if (corners >= 3) isTSpin = true;
+        if (corners >= 3) {
+            isTSpin = true;
+            //SE.tSpinSet(); // ✨ ガチャッ（T-Spin確定音）
+        }
     }
 
-    // ライン消去処理
+    // --- ライン消去処理 ---
     for (let y = arena.length - 1; y >= 0; --y) {
         if (arena[y].every(v => v !== 0)) {
             lineFlashes.push({ y: y, life: 15 });
@@ -397,18 +453,20 @@ function arenaSweep() {
         stats.totalLines += lines;
         if (renCount > stats.maxRen) stats.maxRen = renCount;
 
-        // REN（コンボ）の演出
+        // --- REN（コンボ）の演出と音 ---
         renCountElement.innerText = renCount; 
         renContainer.style.transform = `scale(${1 + renCount * 0.15}) rotate(${Math.random() * 10 - 5}deg)`;
         renContainer.classList.add('bump'); 
         setTimeout(() => renContainer.classList.remove('bump'), 100); 
         const heat = Math.min(renCount * 25, 200); 
         renCountElement.style.color = `rgb(255, ${255 - heat}, 0)`; 
+        
+        SE.ren(renCount); // ✨ RENの高さに合わせて音階アップ！
 
-        // ★ここから：演出テキストの復活とスコア計算
+        // --- スコア・特殊判定・音の分岐 ---
         const isPowerMove = isTSpin || lines === 4;
-        let b = [0, 100, 300, 500, 800][lines]; // 基本スコア
-        if (renCount > 0) b += renCount * 50;  // RENボーナス
+        let b = [0, 100, 300, 500, 800][lines]; 
+        if (renCount > 0) b += renCount * 50; 
         
         let isPerfectClear = arena.every(row => row.every(v => v === 0));
 
@@ -421,33 +479,44 @@ function arenaSweep() {
                 tSpinAnnounce = { text: `${bonusText}T-SPIN ${names[lines]}!`, life: 100, isBtB: btbActive, isPerfect: false }; 
                 b *= 2; 
                 if(lines === 1) stats.ts++; else if(lines === 2) stats.td++; else if(lines === 3) stats.tt++;
+                
+                SE.tSpinClear(); // ✨ パワフルなT-Spin消去音！
+fieldFlash = 40; // 画面を一瞬白く光らせる！
+    shakeTimer = 30; // 揺れを強めにする！
+    // 余裕があれば：背景のキラキラを一瞬だけ黄金色にする
+    bgStars.forEach(s => s.color = "255, 215, 0");
             } else if (lines === 4) { 
                 tSpinAnnounce = { text: `${bonusText}TETRIS!`, life: 100, isBtB: btbActive, isPerfect: false }; 
                 stats.tetris++;
+                
+                SE.tetris(); // ✨ 爽快なテトリス音！
             }
             btbActive = true; 
         } else { 
             btbActive = false; 
+            SE.lineClear(); // ✨ 通常のライン消去音
         }
 
-        // 揺れの設定（RENが高いほど激しく！）
+        // 揺れの設定
         if (document.getElementById('shake-line').checked) {
             shakeTimer = (isPowerMove ? 20 : 10) + (renCount * 4);
         }
 
+        // --- パーフェクトクリア判定 ---
         if (isPerfectClear) {
             b += 3000;
             tSpinAnnounce = { text: "PERFECT CLEAR!!", life: 150, isBtB: false, isPerfect: true, bonus: "+3000" };
             shakeTimer = 50;
             fieldFlash = 60; 
             for(let i=0; i<100; i++) spawnSpark(Math.random()*10, Math.random()*20, 1, "255, 215, 0"); 
+            
+            SE.perfectClear(); // ✨ 重低音のかっこいい音！
         }
 
         player.score += Math.floor(b); 
         if (player.score > stats.highScore) stats.highScore = player.score;
         scoreElement.innerText = player.score;
         updateStatsUI();
-        // ★ここまで
         
     } else {
         renCount = -1;
@@ -465,7 +534,8 @@ function playerReset() {
 }
 function lockPiece() { player.matrix.forEach((row, y) => { row.forEach((v, x) => { if (v !== 0) arena[y + player.pos.y][x + player.pos.x] = v; }); }); arenaSweep(); playerReset(); }
 function playerDrop() { player.pos.y++; if (collide(arena, player)) { player.pos.y--; } else { player.lastOpWasRotate = false; lockTimer = 0; } dropCounter = 0; }
-function hardDrop() { while(!collide(arena, {pos:{x:player.pos.x, y:player.pos.y+1}, matrix:player.matrix})) player.pos.y++; player.matrix.forEach((row, dy) => { row.forEach((v, dx) => { if (v !== 0) { const pieceColor = hexToRgb(COLORS[PIECE_TYPES.indexOf(player.type) + 1]); dropBeams.push({ x: player.pos.x + dx, y: player.pos.y + dy, life: 15, color: pieceColor }); spawnSpark(player.pos.x + dx + 0.5, player.pos.y + dy + 0.5, 5, "255, 255, 255"); } }); }); if (document.getElementById('shake-harddrop').checked) shakeTimer = 5; lockPiece(); }
+function hardDrop() { while(!collide(arena, {pos:{x:player.pos.x, y:player.pos.y+1}, matrix:player.matrix})) player.pos.y++; player.matrix.forEach((row, dy) => { row.forEach((v, dx) => { if (v !== 0) { const pieceColor = hexToRgb(COLORS[PIECE_TYPES.indexOf(player.type) + 1]); dropBeams.push({ x: player.pos.x + dx, y: player.pos.y + dy, life: 15, color: pieceColor }); spawnSpark(player.pos.x + dx + 0.5, player.pos.y + dy + 0.5, 5, "255, 255, 255"); } }); }); if (document.getElementById('shake-harddrop').checked) shakeTimer = 5; lockPiece();
+SE.hardDrop(); }
 function getGhostPos() { let ghost = { pos: {x: player.pos.x, y: player.pos.y}, matrix: player.matrix }; while (!collide(arena, { pos: {x: ghost.pos.x, y: ghost.pos.y + 1}, matrix: ghost.matrix })) { ghost.pos.y++; } return ghost.pos; }
 function drawMatrix(m, o, ctx, isGhost = false) { m.forEach((r, y) => { r.forEach((v, x) => { if (v !== 0) { ctx.fillStyle = isGhost ? 'rgba(255,255,255,0.15)' : COLORS[v]; ctx.fillRect(x + o.x, y + o.y, 1, 1); ctx.lineWidth = 0.05; ctx.strokeStyle = isGhost ? 'rgba(0,210,255,0.3)' : "white"; ctx.strokeRect(x+o.x, y+o.y, 1, 1); } }); }); }
 function drawSide() { holdCanvas.clearRect(0,0,60,60); if(holdPiece) drawMatrix(createPiece(holdPiece), {x:0.5, y:0.5}, holdCanvas); nextCtxs.forEach((ctx, i) => { ctx.clearRect(0,0,60,60); if(nextQueue[i]) drawMatrix(createPiece(nextQueue[i]), {x:0.5, y:0.5}, ctx); }); }
@@ -605,6 +675,7 @@ function updateGamepad() {
 
 // --- メニュー選択の視覚的更新 ---
 function updateMenuSelection() {
+SE.menuSelect();
     activeMenuElements.forEach((el, idx) => {
         if (idx === currentMenuIndex) el.classList.add('selected');
         else el.classList.remove('selected');
@@ -658,6 +729,7 @@ function handleInput(now) {
 
 // --- メニュー開閉の拡張 ---
 function toggleShop() { 
+SE.menuOpen();
     const s = document.getElementById('shop-overlay'); 
     isPaused = (s.style.display !== 'flex'); 
     s.style.display = isPaused ? 'flex' : 'none'; 
@@ -669,6 +741,7 @@ function toggleShop() {
 }
 
 function toggleOptions() { 
+SE.menuOpen();
     const o = document.getElementById('options-overlay'); 
     isPaused = (o.style.display !== 'flex'); 
     o.style.display = isPaused ? 'flex' : 'none'; 
@@ -705,10 +778,312 @@ function prepareTemplate() {
     holdPiece = null; nextQueue = []; 
 }
 
-function buyTSpinTemplate() { prepareTemplate(); const pattern = ["1110111111", "1100111111", "1110111111", "1000111111", "1001111111", "1001111111", "1011111111", "1000111111", "1100111111", "1100111111", "1110111111", "1000111111", "1001111111", "1001111111", "1011111111", "1000000000", "1100000000", "0000000000", "0000000000", "0000000000"].reverse(); for(let y = 0; y < 20; y++) { for(let x = 0; x < 10; x++) if (pattern[y] && pattern[y][x] === "1") arena[y][x] = 8; } nextQueue = Array(14).fill('T').concat(nextQueue); playerReset(); toggleShop(); }
-function buyRenTemplate() { prepareTemplate(); for(let y = 0; y < 20; y++) { for(let x = 0; x < 10; x++) { if (y === 19) { if (x !== 6) arena[y][x] = 8; } else { if (x < 3 || x > 6) arena[y][x] = 8; } } } playerReset(); toggleShop(); }
+function buyTSpinTemplate() {
+    isMagicBuilding = true;
+    
+    // --- ✨ ここから：データのリセット処理 ---
+    player.score = 0;              // スコアを0に
+    renCount = -1;                 // REN（コンボ）をリセット
+    btbActive = false;             // Back to Backを解除
+    
+    // 統計データもリセットしたい場合はここも（お好みで！）
+    stats.totalLines = 0;
+    stats.tetris = 0;
+    stats.ts = 0; stats.td = 0; stats.tt = 0;
+    stats.btb = 0;
+
+    // UIの表示もリセット
+    scoreElement.innerText = "0";
+    renCountElement.innerText = "0";
+    renContainer.style.transform = "scale(1) rotate(0deg)";
+    updateStatsUI();
+    // --- ✨ ここまで ---
+
+    arena = Array.from({length: 20}, () => new Array(10).fill(0));
+    
+    const pattern = [
+        "1110111111", "1100111111", "1110111111", 
+        "1000111111", "1001111111", "1001111111", "1011111111", 
+        "1000111111", "1100111111", "1100111111", "1110111111", 
+        "1000111111", "1001111111", "1001111111", "1011111111", 
+        "1000000000", "1100000000", "0000000000", "0000000000", "0000000000"
+    ].reverse();
+
+    const blockPositions = [];
+    for(let y = 0; y < 20; y++) {
+        for(let x = 0; x < 10; x++) {
+            if (pattern[y] && pattern[y][x] === "1") {
+                blockPositions.push({x, y, color: 8});
+            }
+        }
+    }
+
+    blockPositions.forEach((block, i) => {
+        setTimeout(() => {
+            arena[block.y][block.x] = block.color;
+            if (i % 2 === 0) SE.playTone(600 + (i * 2), 'sine', 0.05, 0.02);
+            if (i % 5 === 0) {
+                spawnSpark(block.x + 0.5, block.y + 0.5, 3, "150, 150, 150");
+                shakeTimer = 1;
+            }
+            drawSide(); 
+        }, i * 10); 
+    });
+
+    const totalTime = blockPositions.length * 10;
+    setTimeout(() => {
+        nextQueue = Array(20).fill('T').concat(nextQueue);
+        playerReset();
+        SE.menuOpen();
+        isMagicBuilding = false; 
+    }, totalTime + 100);
+
+    toggleShop();
+}
+
+function buyRenTemplate() {
+    isMagicBuilding = true;
+
+    // データのリセット
+    player.score = 0;
+    renCount = -1;
+    btbActive = false;
+    stats.totalLines = 0;
+    updateStatsUI();
+    scoreElement.innerText = "0";
+    renCountElement.innerText = "0";
+
+// --- ✨ ネクストを1巡目からリセット ---
+    nextQueue = []; // 今のキューを空っぽにする
+    // 最初の7種セットを生成
+    let firstBag = [...PIECE_TYPES].sort(() => Math.random() - 0.5);
+    nextQueue = nextQueue.concat(firstBag); 
+    // さらに予備のセットも足しておく（合計14個）
+    let secondBag = [...PIECE_TYPES].sort(() => Math.random() - 0.5);
+    nextQueue = nextQueue.concat(secondBag);
+    // --- ✨ ここまで ---
+
+    arena = Array.from({length: 20}, () => new Array(10).fill(0));
+    
+    const blockPositions = [];
+    // 座標の計算
+    for(let y = 0; y < 20; y++) {
+        for(let x = 0; x < 10; x++) {
+            let isBlock = false;
+            
+            if (y === 19) {
+                // 底の部分（コンボの種）
+                if (x !== 6) isBlock = true; 
+            } else if (y >= 2) { // ✨ ここ！y=2（上から3段目）から下を全部埋める！
+                // 真ん中4列(3,4,5,6)以外をすべてブロックにする
+                if (x < 3 || x > 6) isBlock = true;
+            }
+            
+            if (isBlock) {
+                blockPositions.push({x, y, color: 8});
+            }
+        }
+    }
+
+    // 下から順に「シュバババッ！」
+    blockPositions.reverse().forEach((block, i) => {
+        setTimeout(() => {
+            arena[block.y][block.x] = block.color;
+            if (i % 4 === 0) SE.playTone(300 + (i * 3), 'sine', 0.05, 0.02);
+            if (i % 10 === 0) {
+                spawnSpark(block.x + 0.5, block.y + 0.5, 2, "100, 200, 255");
+                shakeTimer = 1;
+            }
+            drawSide(); 
+        }, i * 5); // ブロックが多いので、さらにスピードアップ(5ms)！
+    });
+
+    const totalTime = blockPositions.length * 5;
+    setTimeout(() => {
+        playerReset();
+        SE.menuOpen();
+        isMagicBuilding = false;
+    }, totalTime + 100);
+
+    toggleShop();
+}
+
+
 function buyHachimitsu() { prepareTemplate(); const pattern = ["1111000000", "1111001100", "1110001111", "1110111111", "1110011111", "1110111111", "1111011111"].reverse(); for(let y = 0; y < pattern.length; y++) { for(let x = 0; x < 10; x++) if (pattern[y][x] === "1") arena[19 - y][x] = 8; } nextQueue = ['T', 'T', 'I', 'S', 'Z', 'O', 'L', 'J'].concat(nextQueue); playerReset(); toggleShop(); }
 function buyOpeningTD() { prepareTemplate(); const pattern = ["0001110000", "1001111000", "1000111111", "1101111111"]; for(let i = 0; i < pattern.length; i++) { const yCoord = 19 - (pattern.length - 1 - i); for(let x = 0; x < 10; x++) if (pattern[i][x] === "1") arena[yCoord][x] = 8; } const openingSequence = ['T', ...(['S', 'Z', 'J'].sort(() => Math.random() - 0.5)), ...(['O', 'L', 'I'].sort(() => Math.random() - 0.5))]; nextQueue = openingSequence.concat([...PIECE_TYPES].sort(() => Math.random() - 0.5)); playerReset(); toggleShop(); }
+
+// --- SE (音響) 管理システム ---
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+const SE = {
+    enabled: true,
+    
+    // 基本の音を作る関数
+    playTone(freq, type, duration, volume = 0.1, ramp = true) {
+        if (!this.enabled) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        
+        osc.type = type; // square, triangle, sine, sawtooth
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        
+        gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+        if (ramp) {
+            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+        }
+        
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+    },
+
+    move() { this.playTone(200, 'sine', 0.05, 0.05); }, // 控えめな音
+    rotate() { this.playTone(400, 'triangle', 0.1, 0.1); }, // カチッ
+    hold() { this.playTone(600, 'sine', 0.1, 0.1); }, // ポンッ
+    hardDrop() { this.playTone(150, 'square', 0.2, 0.1); }, // カンッ！
+    
+    menuSelect() { this.playTone(800, 'sine', 0.05, 0.05); }, // ぽっ
+    menuOpen() { this.playTone(300, 'square', 0.1, 0.05); this.playTone(500, 'square', 0.15, 0.05); }, // ガチャ
+
+    lineClear() { this.playTone(1000, 'sine', 0.3, 0.1); }, // 爽快
+    tetris() { // テトリス（4列）
+        [440, 554, 659, 880].forEach((f, i) => {
+            setTimeout(() => this.playTone(f, 'sine', 0.4, 0.1), i * 50);
+        });
+    },
+
+    tSpinSet() { this.playTone(200, 'sawtooth', 0.2, 0.1); }, // ガチャッ（はめた時）
+   tSpinClear() { // ✨ パワフルな重低音T-SPIN
+        const now = audioCtx.currentTime;
+        
+        // 1. 低音の柱（ドォォォンという重み）
+        this.playTone(60, 'sawtooth', 0.6, 0.2); 
+        this.playTone(120, 'sawtooth', 0.5, 0.15);
+        
+        // 2. テトリス風の高音成分を少し混ぜる（キレを出す）
+        setTimeout(() => this.playTone(440, 'sine', 0.4, 0.1), 50);
+        setTimeout(() => this.playTone(880, 'sine', 0.3, 0.05), 100);
+
+        // 3. 振動感（少しピッチを揺らすとより強力に聞こえます）
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(80, now);
+        osc.frequency.exponentialRampToValueAtTime(40, now + 0.5); // 音が低く沈み込む
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.6);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(now + 0.6);
+    },
+
+    ren(count) {
+        const pitch = 440 + (count * 40); // RENを重ねるほど高く
+        this.playTone(pitch, 'sine', 0.2, 0.1);
+    },
+
+    perfectClear() {
+        const now = audioCtx.currentTime;
+        [55, 110, 220].forEach(f => this.playTone(f, 'square', 1.0, 0.2, false)); // 重低音
+    },
+tSpinSet() { 
+        // 「ガキン！」という、何かがロックされたような鋭い音
+        this.playTone(300, 'square', 0.15, 0.1); 
+        setTimeout(() => this.playTone(150, 'square', 0.2, 0.15), 50);
+    }
+};
+
+
+function toggleSE() {
+    const cb = document.getElementById('se-toggle');
+    cb.checked = !cb.checked; // クリックで反転
+    SE.enabled = cb.checked;
+    if (SE.enabled) {
+        audioCtx.resume(); // ブラウザの制限解除用
+        SE.menuSelect();
+    }
+}
+
+function loadLocalBGM(input) {
+    if (input.files && input.files[0]) {
+        const file = input.files[0];
+        const url = URL.createObjectURL(file); // パソコン内のファイルに一時的な住所（URL）を作る魔法
+        
+        bgm.src = url;
+        bgm.load();
+        
+        // 読み込んだらすぐ再生！
+        bgm.play().then(() => {
+            isBgmPlaying = true;
+        }).catch(e => console.log("再生にはクリックが必要です"));
+        
+        toggleOptions(); // メニューを閉じる
+    }
+}
+
+function startBGM(type = 'standard') {
+    bgm.src = BGM_LIST[type];
+    bgm.play().then(() => {
+        isBgmPlaying = true;
+    }).catch(err => {
+        console.log("ブラウザの制限で、画面を一度クリックしないと音が出ないよ！");
+    });
+}
+
+function stopBGM() {
+    bgm.pause();
+    isBgmPlaying = false;
+}
+
+// --- テンプレート配置演出 (魔法の積み上げ) ---
+function applyTemplateWithMagic(matrix) {
+    // 1. 今のフィールドをクリア
+    arena = Array.from({length: 20}, () => new Array(10).fill(0));
+    
+    let delay = 0;
+    const blockPositions = [];
+
+    // 積み上げるべきブロックの位置をリストアップ
+    for (let y = 0; y < matrix.length; y++) {
+        for (let x = 0; x < matrix[y].length; x++) {
+            if (matrix[y][x] !== 0) {
+                blockPositions.push({x, y, color: matrix[y][x]});
+            }
+        }
+    }
+
+    // 2. 下から順に、時間差で配置していく
+    blockPositions.reverse().forEach((block, i) => {
+        setTimeout(() => {
+            arena[block.y][block.x] = block.color;
+            
+            // 配置の瞬間に火花と音！
+            const rgb = hexToRgb(COLORS[block.color]);
+            spawnSpark(block.x + 0.5, block.y + 0.5, 5, rgb);
+            
+            // シュバッという音 (高めの音を短く)
+            SE.playTone(800 + (i * 10), 'sine', 0.05, 0.03);
+            
+            // 画面を少し揺らす
+            shakeTimer = 1;
+            
+            drawSide(); // 画面更新
+        }, i * 20); // 20ms間隔で「シュバババッ！」
+    });
+
+    // 最後に完了音！
+   setTimeout(() => {
+        playerReset();
+        SE.menuOpen();
+        isMagicBuilding = false;
+        
+        // ✨ ここでBGMスタート！
+        startBGM('standard');
+    }, totalTime + 100);
+}
 
 let dropCounter = 0, lastTime = 0;
 function update(time = 0) {
