@@ -115,14 +115,14 @@
                 <span style="font-size: 12px; color: #ff4444;">↻</span>
             </div>
             <div class="menu-item" onclick="toggleCheckbox('shake-harddrop')">
-                <span>HardDrop Shake</span>
+                <span>HardDrop Shake / ハードドロップのカメラの揺</span>
                 <label class="switch">
                     <input type="checkbox" id="shake-harddrop" checked>
                     <span class="slider"></span>
                 </label>
             </div>
             <div class="menu-item" onclick="toggleCheckbox('shake-line')">
-                <span>Line Clear Shake</span>
+                <span>Line Clear Shake / ライン消去時のカメラの揺れ</span>
                 <label class="switch">
                     <input type="checkbox" id="shake-line" checked>
                     <span class="slider"></span>
@@ -138,7 +138,14 @@
 <div class="menu-item">
     <span>Select BGM (MP3/WAV/OGG)</span>
     <input type="file" id="bgm-upload" accept=".mp3, .wav, .ogg, audio/mp3, audio/wav, audio/ogg" style="display:none" onchange="loadLocalBGM(this)">
-    <button onclick="document.getElementById('bgm-upload').click()" style="background:#444; color:#fff; border:none; border-radius:5px; cursor:pointer;">📁 Open</button>
+    <button onclick="document.getElementById('bgm-upload').click()" style="background:#444; color:#fff; border:none; border-radius:5px; cursor:pointer;">📁ファイルを選択！</button>
+</div>
+<div class="menu-item" onclick="toggleBGM()">
+    <span>BGM SOUND</span>
+    <label class="switch">
+        <input type="checkbox" id="bgm-toggle" checked>
+        <span class="slider"></span>
+    </label>
 </div>
             <div class="close-btn" onclick="toggleOptions()">[ CLOSE & RESUME ]</div>
         </div>
@@ -377,7 +384,9 @@ function playerRotate(dir) {
         player.pos.x = pos.x; player.pos.y = pos.y;
     }
     rotateMatrix(player.matrix, -dir);
-}function playerMove(dir) {
+}
+
+function playerMove(dir) {
 SE.move();
     player.pos.x += dir;
     if (collide(arena, player)) { player.pos.x -= dir; return false; }
@@ -874,7 +883,7 @@ function buyRenTemplate() {
             if (y === 19) {
                 // 底の部分（コンボの種）
                 if (x !== 6) isBlock = true; 
-            } else if (y >= 2) { // ✨ ここ！y=2（上から3段目）から下を全部埋める！
+            } else if (y >= 0) { // ✨ ここ！y=0（上から3段目）から下を全部埋める！
                 // 真ん中4列(3,4,5,6)以外をすべてブロックにする
                 if (x < 3 || x > 6) isBlock = true;
             }
@@ -1037,6 +1046,8 @@ function stopBGM() {
     bgm.pause();
     isBgmPlaying = false;
 }
+
+
 
 // --- テンプレート配置演出 (魔法の積み上げ) ---
 function applyTemplateWithMagic(matrix) {
