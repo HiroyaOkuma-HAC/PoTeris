@@ -41,8 +41,22 @@
         .panel-box { background: rgba(26, 26, 26, 0.8); border: 2px solid #444; border-radius: 5px; padding: 10px; text-align: center; }
         .panel-title { font-size: 11px; color: #00d2ff; margin-bottom: 5px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
         
-        #ren-container { height: 65px; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: transform 0.1s ease; }
-        #ren-count { font-size: 40px; font-weight: bold; color: #ff9900; margin: 0; line-height: 1; text-shadow: 0 0 15px rgba(255, 153, 0, 0.5); }
+      #ren-container { 
+    height: 65px; 
+    display: flex; 
+    flex-direction: column; 
+    justify-content: center; 
+    align-items: center; 
+    /* 大きさを変えないように transform 関連を削除、またはマイルドに */
+    transition: transform 0.1s ease; 
+}
+       #ren-count { 
+    font-size: 32px; /* 少し小さめで固定！ */
+    font-weight: bold; 
+    color: #ff9900; 
+    margin: 0; 
+    line-height: 1; 
+}
         #ren-label { font-size: 12px; color: #aaa; margin: 0; font-weight: bold; }
         .bump { transform: scale(1.3); }
         
@@ -234,8 +248,8 @@ for(let i=1; i<5; i++) nextCtxs[i].scale(8, 8);
 const COLORS = [
     null, 
     '#00FFFF', // T: 紫 (Purple)
-    '#0055FF', // L: 青 (Blue)
-    '#FF8C00', // J: オレンジ (Orange)
+    '#FF8C00', // L: 青 (Blue)
+    '#0055FF', // J: オレンジ (Orange)
     '#FFD700', // O: 黄色 (Yellow)
     '#FF2D2D', // Z: 赤 (Red)
     '#00FF44', // S: 緑 (Green)
@@ -267,6 +281,7 @@ let nextQueue = [], holdPiece = null, canHold = true, particles = [], lineFlashe
 let tSpinAnnounce = { text: '', life: 0, isBtB: false, isPerfect: false };
 let fieldFlash = 0; 
 let lockTimer = 0, moveCount = 0, btbActive = false, shakeTimer = 0, renCount = -1, isPaused = false;
+let isInfiniteRenMode = false; // これがONの時だけ壁が湧きます！
 // --- 背景のキラキラ設定 ---
 let bgStars = [];
 function createBackgroundStars() {
@@ -442,35 +457,47 @@ function arenaSweep() {
         }
     }
 
-    // --- ライン消去処理 ---
-    for (let y = arena.length - 1; y >= 0; --y) {
-        if (arena[y].every(v => v !== 0)) {
-            lineFlashes.push({ y: y, life: 15 });
-            gridWaves.push({ y: y, radius: 0, life: 40 });
-            for(let x=0; x<10; x++) { 
-                const rgb = hexToRgb(COLORS[arena[y][x]]); 
-                spawnSpark(x + 0.5, y + 0.5, 12, rgb); 
-            }
-            arena.splice(y, 1); 
-            arena.unshift(new Array(10).fill(0));
-            lines++; y++;
+// --- ラインチェックと消去 ---
+    outer: for (let y = arena.length - 1; y >= 0; --y) {
+        for (let x = 0; x < arena[y].length; ++x) {
+            if (arena[y][x] === 0) continue outer;
         }
+
+        // ラインを1行消す
+        const row = arena.splice(y, 1)[0].fill(0);
+        
+        // ✨【無限RENの魔法】モードがONなら、消えた行を「壁」にする
+        if (isInfiniteRenMode) {
+            for (let x = 0; x < 10; x++) {
+                if (x < 3 || x > 6) row[x] = 8; // 両端に壁を塗る
+            }
+        }
+        
+        // 一番上に追加（無限なら壁が、普通なら空の行が追加される）
+        arena.unshift(row);
+        lines++;
+        y++; 
     }
 
-    if (lines > 0) {
-        renCount++; 
-        stats.totalLines += lines;
-        if (renCount > stats.maxRen) stats.maxRen = renCount;
+if (lines > 0) {
+    renCount++;
+    renCountElement.innerText = renCount;
 
-        // --- REN（コンボ）の演出と音 ---
-        renCountElement.innerText = renCount; 
-        renContainer.style.transform = `scale(${1 + renCount * 0.15}) rotate(${Math.random() * 10 - 5}deg)`;
-        renContainer.classList.add('bump'); 
-        setTimeout(() => renContainer.classList.remove('bump'), 100); 
-        const heat = Math.min(renCount * 25, 200); 
-        renCountElement.style.color = `rgb(255, ${255 - heat}, 0)`; 
-        
-        SE.ren(renCount); // ✨ RENの高さに合わせて音階アップ！
+    // ✨ 大きくする代わりに、横に「ビビッ」と震わせる（被らない！）
+    renContainer.style.transform = `translateX(${Math.random() * 10 - 5}px)`;
+    
+    // ✨ RENに応じて色を「熱く」するだけにする
+    const heat = Math.min(renCount * 20, 255);
+    renCountElement.style.color = `rgb(255, ${255 - heat}, 0)`;
+    renCountElement.style.textShadow = `0 0 ${Math.min(renCount, 20)}px rgba(255, 100, 0, 0.8)`;
+
+    // 0.1秒後に震えを止める
+    setTimeout(() => {
+        renContainer.style.transform = `translateX(0)`;
+    }, 100);
+
+    SE.ren(renCount);
+
 
         // --- スコア・特殊判定・音の分岐 ---
         const isPowerMove = isTSpin || lines === 4;
@@ -550,6 +577,10 @@ function drawMatrix(m, o, ctx, isGhost = false) { m.forEach((r, y) => { r.forEac
 function drawSide() { holdCanvas.clearRect(0,0,60,60); if(holdPiece) drawMatrix(createPiece(holdPiece), {x:0.5, y:0.5}, holdCanvas); nextCtxs.forEach((ctx, i) => { ctx.clearRect(0,0,60,60); if(nextQueue[i]) drawMatrix(createPiece(nextQueue[i]), {x:0.5, y:0.5}, ctx); }); }
 
 function draw() {
+
+
+	
+
     if (shakeTimer > 0) { /* ...揺れの処理... */ }
     context.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -578,7 +609,9 @@ function draw() {
         fieldFlash--;
     }
 
-    context.strokeStyle = 'rgba(0, 210, 255, 0.08)'; context.lineWidth = 0.02;
+
+
+    context.strokeStyle = 'rgba(255, 255, 255, 0.58)'; context.lineWidth = 0.02;
     for(let x=0; x<=10; x++) { context.beginPath(); context.moveTo(x, 0); context.lineTo(x, 20); context.stroke(); }
     for(let y=0; y<=20; y++) { context.beginPath(); context.moveTo(0, y); context.lineTo(10, y); context.stroke(); }
     gridWaves = gridWaves.filter(w => { const alpha = w.life / 30; context.strokeStyle = `rgba(0, 210, 255, ${alpha * 0.4})`; context.lineWidth = 0.1; for(let i=-2; i<=2; i++) { let r1 = w.y + i - Math.floor(w.radius), r2 = w.y + i + Math.floor(w.radius); if(r1 >= 0 && r1 < 20) { context.beginPath(); context.moveTo(0, r1); context.lineTo(10, r1); context.stroke(); } if(r2 >= 0 && r2 < 20) { context.beginPath(); context.moveTo(0, r2); context.lineTo(10, r2); context.stroke(); } } w.radius += 0.8; w.life--; return w.life > 0; });
@@ -789,6 +822,7 @@ function prepareTemplate() {
 
 function buyTSpinTemplate() {
     isMagicBuilding = true;
+isInfiniteRenMode = false; // 普通のモードに戻す
     
     // --- ✨ ここから：データのリセット処理 ---
     player.score = 0;              // スコアを0に
@@ -852,6 +886,7 @@ function buyTSpinTemplate() {
 
 function buyRenTemplate() {
     isMagicBuilding = true;
+isInfiniteRenMode = true; // ✨ ここで無限モード発動！
 
     // データのリセット
     player.score = 0;
@@ -918,8 +953,12 @@ function buyRenTemplate() {
 }
 
 
-function buyHachimitsu() { prepareTemplate(); const pattern = ["1111000000", "1111001100", "1110001111", "1110111111", "1110011111", "1110111111", "1111011111"].reverse(); for(let y = 0; y < pattern.length; y++) { for(let x = 0; x < 10; x++) if (pattern[y][x] === "1") arena[19 - y][x] = 8; } nextQueue = ['T', 'T', 'I', 'S', 'Z', 'O', 'L', 'J'].concat(nextQueue); playerReset(); toggleShop(); }
-function buyOpeningTD() { prepareTemplate(); const pattern = ["0001110000", "1001111000", "1000111111", "1101111111"]; for(let i = 0; i < pattern.length; i++) { const yCoord = 19 - (pattern.length - 1 - i); for(let x = 0; x < 10; x++) if (pattern[i][x] === "1") arena[yCoord][x] = 8; } const openingSequence = ['T', ...(['S', 'Z', 'J'].sort(() => Math.random() - 0.5)), ...(['O', 'L', 'I'].sort(() => Math.random() - 0.5))]; nextQueue = openingSequence.concat([...PIECE_TYPES].sort(() => Math.random() - 0.5)); playerReset(); toggleShop(); }
+function buyHachimitsu() {
+isInfiniteRenMode = false; // 普通のモードに戻す
+ prepareTemplate(); const pattern = ["1111000000", "1111001100", "1110001111", "1110111111", "1110011111", "1110111111", "1111011111"].reverse(); for(let y = 0; y < pattern.length; y++) { for(let x = 0; x < 10; x++) if (pattern[y][x] === "1") arena[19 - y][x] = 8; } nextQueue = ['T', 'T', 'I', 'S', 'Z', 'O', 'L', 'J'].concat(nextQueue); playerReset(); toggleShop(); }
+function buyOpeningTD() {
+isInfiniteRenMode = false; // 普通のモードに戻す
+ prepareTemplate(); const pattern = ["0001110000", "1001111000", "1000111111", "1101111111"]; for(let i = 0; i < pattern.length; i++) { const yCoord = 19 - (pattern.length - 1 - i); for(let x = 0; x < 10; x++) if (pattern[i][x] === "1") arena[yCoord][x] = 8; } const openingSequence = ['T', ...(['S', 'Z', 'J'].sort(() => Math.random() - 0.5)), ...(['O', 'L', 'I'].sort(() => Math.random() - 0.5))]; nextQueue = openingSequence.concat([...PIECE_TYPES].sort(() => Math.random() - 0.5)); playerReset(); toggleShop(); }
 
 // --- SE (音響) 管理システム ---
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
